@@ -1,0 +1,4 @@
+/vendor
+tests/output
+tests/coverage.dat
+composer.lock
