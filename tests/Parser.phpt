@@ -107,6 +107,28 @@ test(function() { // optional argument
 	Assert::same( array('-p' => NULL), $cmd->parse(array()) );
 	Assert::same( array('-p' => TRUE), $cmd->parse(array('-p')) );
 	Assert::same( array('-p' => 'val'), $cmd->parse(explode(' ', '-p val')) );
+
+
+	$cmd = new Parser('
+		-p param
+	', array(
+		'-p' => array(Parser::VALUE => 123),
+	));
+
+	Assert::same( array('-p' => 123), $cmd->parse(array()) );
+	Assert::same( array('-p' => TRUE), $cmd->parse(array('-p')) );
+	Assert::same( array('-p' => 'val'), $cmd->parse(explode(' ', '-p val')) );
+
+
+	$cmd = new Parser('
+		-p param
+	', array(
+		'-p' => array(Parser::OPTIONAL => TRUE),
+	));
+
+	Assert::same( array('-p' => NULL), $cmd->parse(array()) );
+	Assert::same( array('-p' => TRUE), $cmd->parse(array('-p')) );
+	Assert::same( array('-p' => 'val'), $cmd->parse(explode(' ', '-p val')) );
 });
 
 
