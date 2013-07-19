@@ -53,6 +53,9 @@ test(function() { // alias
 	Assert::same( array('--param' => TRUE), $cmd->parse(array('-p')) );
 	Assert::same( array('--param' => TRUE), $cmd->parse(array('--param')) );
 	Assert::same( array('--param' => TRUE), $cmd->parse(explode(' ', '-p --param')) );
+	Assert::exception(function() use ($cmd) {
+		$cmd->parse(array('-p=val'));
+	}, 'Exception', 'Option --param has not argument.');
 
 	$cmd = new Parser('
 		-p --param
@@ -75,6 +78,7 @@ test(function() { // argument
 
 	Assert::same( array('-p' => NULL), $cmd->parse(array()) );
 	Assert::same( array('-p' => 'val'), $cmd->parse(explode(' ', '-p val')) );
+	Assert::same( array('-p' => 'val'), $cmd->parse(explode(' ', '-p=val')) );
 	Assert::same( array('-p' => 'val2'), $cmd->parse(explode(' ', '-p val1 -p val2')) );
 
 	Assert::exception(function() use ($cmd) {
