@@ -159,7 +159,7 @@ class Parser
 
 	public function isEmpty()
 	{
-		return !isset($_SERVER['argc']) || $_SERVER['argc'] < 2;
+		return !isset($_SERVER['argv']) || count($_SERVER['argv']) < 2;
 	}
 
 }
