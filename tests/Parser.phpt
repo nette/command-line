@@ -10,10 +10,12 @@ require __DIR__ . '/bootstrap.php';
 test(function() {
 	$cmd = new Parser('
 		-p
+		--p
+		--a-b
 	');
 
-	Assert::same( array('-p' => NULL), $cmd->parse(array()) );
-	Assert::same( array('-p' => TRUE), $cmd->parse(array('-p')) );
+	Assert::same( array('-p' => NULL, '--p' => NULL, '--a-b' => NULL), $cmd->parse(array()) );
+	Assert::same( array('-p' => TRUE, '--p' => NULL, '--a-b' => NULL), $cmd->parse(array('-p')) );
 
 	$cmd = new Parser('
 		-p  description
