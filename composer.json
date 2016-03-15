@@ -17,7 +17,8 @@
 		"php": ">=5.4.4"
 	},
 	"require-dev": {
-		"nette/tester": "~1.0"
+		"nette/tester": "~1.0",
+		"tracy/tracy": "^2.3"
 	},
 	"autoload": {
 		"classmap": ["src/"]
