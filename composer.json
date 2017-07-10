@@ -1,6 +1,6 @@
 {
 	"name": "nette/command-line",
-	"description": "Command line options and arguments parser.",
+	"description": "Nette Command Line: options and arguments parser.",
 	"keywords": ["nette", "cmd", "cmd-line"],
 	"homepage": "https://nette.org",
 	"license": ["BSD-3-Clause", "GPL-2.0", "GPL-3.0"],
