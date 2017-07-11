@@ -116,7 +116,7 @@ class Parser
 			}
 
 			if (!empty($opt[self::ENUM]) && !in_array($arg, $opt[self::ENUM], TRUE) && !($opt[self::OPTIONAL] && $arg === TRUE)) {
-				throw new \Exception("Value of option $name must be " . implode(', or ', $opt[self::ENUM]) . ".");
+				throw new \Exception("Value of option $name must be " . implode(', or ', $opt[self::ENUM]) . '.');
 			}
 			$this->checkArg($opt, $arg);
 
@@ -167,5 +167,4 @@ class Parser
 	{
 		return !isset($_SERVER['argv']) || count($_SERVER['argv']) < 2;
 	}
-
 }

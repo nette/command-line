@@ -49,5 +49,4 @@ class Console
 		}
 		return $s;
 	}
-
 }
