@@ -14,3 +14,5 @@ composer require nette/command-line
 ```
 
 The last stable release requires PHP version 5.4 or newer (is compatible with PHP 7.0 and 7.1).
+
+If you like Nette, **[please make a donation now](https://nette.org/donate)**. Thank you!
