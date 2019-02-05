@@ -24,13 +24,13 @@ class Console
 	}
 
 
-	public function useColors($state = true)
+	public function useColors(bool $state = true): void
 	{
-		$this->useColors = (bool) $state;
+		$this->useColors = $state;
 	}
 
 
-	public function color($color = null, $s = null)
+	public function color(?string $color, string $s = null): string
 	{
 		static $colors = [
 			'black' => '0;30', 'gray' => '1;30', 'silver' => '0;37', 'white' => '1;37',
@@ -40,13 +40,13 @@ class Console
 			null => '0',
 		];
 		if ($this->useColors) {
-			$c = explode('/', $color);
+			$c = explode('/', $color ?: '/');
 			return "\033["
 				. ($c[0] ? $colors[$c[0]] : '')
 				. (empty($c[1]) ? '' : ';4' . substr($colors[$c[1]], -1))
 				. 'm' . $s
 				. ($s === null ? '' : "\033[0m");
 		}
-		return $s;
+		return (string) $s;
 	}
 }
