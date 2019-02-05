@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Nette\CommandLine\Parser;
 use Tester\Assert;
 
