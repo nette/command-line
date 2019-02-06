@@ -29,7 +29,7 @@ class Parser
 	/** @var string[] */
 	private $aliases = [];
 
-	/** @var bool[] */
+	/** @var string[] */
 	private $positional = [];
 
 	/** @var string */
