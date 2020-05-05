@@ -13,6 +13,6 @@ Install it using Composer:
 composer require nette/command-line
 ```
 
-It requires PHP version 7.1 and supports PHP up to 7.4.
+It requires PHP version 7.2 and supports PHP up to 7.4.
 
 If you like Nette, **[please make a donation now](https://nette.org/donate)**. Thank you!
