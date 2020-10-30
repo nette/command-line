@@ -70,11 +70,12 @@ class Parser
 	}
 
 
-	public function parse(array $args = null): array
+	public function parse(?array $args = null): array
 	{
 		if ($args === null) {
 			$args = isset($_SERVER['argv']) ? array_slice($_SERVER['argv'], 1) : [];
 		}
+
 		$params = [];
 		reset($this->positional);
 		$i = 0;
@@ -84,6 +85,7 @@ class Parser
 				if (!current($this->positional)) {
 					throw new \Exception("Unexpected parameter $arg.");
 				}
+
 				$name = current($this->positional);
 				$this->checkArg($this->options[$name], $arg);
 				if (empty($this->options[$name][self::REPEATABLE])) {
@@ -92,6 +94,7 @@ class Parser
 				} else {
 					$params[$name][] = $arg;
 				}
+
 				continue;
 			}
 
@@ -117,9 +120,17 @@ class Parser
 				}
 			}
 
-			if (!empty($opt[self::ENUM]) && !in_array($arg, $opt[self::ENUM], true) && !($opt[self::OPTIONAL] && $arg === true)) {
+			if (
+				!empty($opt[self::ENUM])
+				&& !in_array($arg, $opt[self::ENUM], true)
+				&& !(
+					$opt[self::OPTIONAL]
+					&& $arg === true
+				)
+			) {
 				throw new \Exception("Value of option $name must be " . implode(', or ', $opt[self::ENUM]) . '.');
 			}
+
 			$this->checkArg($opt, $arg);
 
 			if (empty($opt[self::REPEATABLE])) {
@@ -139,10 +150,12 @@ class Parser
 			} else {
 				$params[$name] = null;
 			}
+
 			if (!empty($opt[self::REPEATABLE])) {
 				$params[$name] = (array) $params[$name];
 			}
 		}
+
 		return $params;
 	}
 
@@ -160,6 +173,7 @@ class Parser
 			if ($path === false) {
 				throw new \Exception("File path '$arg' not found.");
 			}
+
 			$arg = $path;
 		}
 	}

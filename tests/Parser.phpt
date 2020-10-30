@@ -59,7 +59,7 @@ test('alias', function () {
 	Assert::same(['--param' => true], $cmd->parse(explode(' ', '-p --param')));
 	Assert::exception(function () use ($cmd) {
 		$cmd->parse(['-p=val']);
-	}, Exception::class, 'Option --param has not argument.');
+	}, Throwable::class, 'Option --param has not argument.');
 
 	$cmd = new Parser('
 		-p --param
@@ -87,11 +87,11 @@ test('argument', function () {
 
 	Assert::exception(function () use ($cmd) {
 		$cmd->parse(['-p']);
-	}, Exception::class, 'Option -p requires argument.');
+	}, Throwable::class, 'Option -p requires argument.');
 
 	Assert::exception(function () use ($cmd) {
 		$cmd->parse(['-p', '-a']);
-	}, Exception::class, 'Option -p requires argument.');
+	}, Throwable::class, 'Option -p requires argument.');
 
 
 	$cmd = new Parser('
@@ -158,11 +158,11 @@ test('enumerates', function () {
 	Assert::same(['-p' => null], $cmd->parse([]));
 	Assert::exception(function () use ($cmd) {
 		$cmd->parse(['-p']);
-	}, Exception::class, 'Option -p requires argument.');
+	}, Throwable::class, 'Option -p requires argument.');
 	Assert::same(['-p' => 'a'], $cmd->parse(explode(' ', '-p a')));
 	Assert::exception(function () use ($cmd) {
 		$cmd->parse(explode(' ', '-p foo'));
-	}, Exception::class, 'Value of option -p must be a, or b, or c.');
+	}, Throwable::class, 'Value of option -p must be a, or b, or c.');
 
 
 	$cmd = new Parser('
@@ -174,7 +174,7 @@ test('enumerates', function () {
 	Assert::same(['-p' => 'a'], $cmd->parse(explode(' ', '-p a')));
 	Assert::exception(function () use ($cmd) {
 		$cmd->parse(explode(' ', '-p foo'));
-	}, Exception::class, 'Value of option -p must be a, or b, or c.');
+	}, Throwable::class, 'Value of option -p must be a, or b, or c.');
 });
 
 
@@ -188,7 +188,7 @@ test('realpath', function () {
 
 	Assert::exception(function () use ($cmd) {
 		$cmd->parse(['-p', 'xyz']);
-	}, Exception::class, "File path 'xyz' not found.");
+	}, Throwable::class, "File path 'xyz' not found.");
 	Assert::same(['-p' => __FILE__], $cmd->parse(['-p', __FILE__]));
 });
 
@@ -203,11 +203,11 @@ test('positional arguments', function () {
 
 	Assert::exception(function () use ($cmd) {
 		$cmd->parse([]);
-	}, Exception::class, 'Missing required argument <pos>.');
+	}, Throwable::class, 'Missing required argument <pos>.');
 
 	Assert::exception(function () use ($cmd) {
 		$cmd->parse(['val1', 'val2']);
-	}, Exception::class, 'Unexpected parameter val2.');
+	}, Throwable::class, 'Unexpected parameter val2.');
 
 	$cmd = new Parser('', [
 		'pos' => [Parser::REPEATABLE => true],
@@ -239,9 +239,9 @@ test('errors', function () {
 
 	Assert::exception(function () use ($cmd) {
 		$cmd->parse(['-x']);
-	}, Exception::class, 'Unknown option -x.');
+	}, Throwable::class, 'Unknown option -x.');
 
 	Assert::exception(function () use ($cmd) {
 		$cmd->parse(['val']);
-	}, Exception::class, 'Unexpected parameter val.');
+	}, Throwable::class, 'Unexpected parameter val.');
 });
