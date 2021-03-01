@@ -226,7 +226,6 @@ test('positional arguments', function () {
 	$cmd = new Parser('', [
 		'pos' => [Parser::VALUE => 'default', Parser::REPEATABLE => true],
 	]);
-
 	Assert::same(['pos' => ['default']], $cmd->parse([]));
 });
 

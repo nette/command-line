@@ -15,8 +15,7 @@ namespace Nette\CommandLine;
  */
 class Console
 {
-	/** @var bool */
-	private $useColors;
+	private bool $useColors;
 
 
 	public function __construct()
