@@ -21,6 +21,7 @@ class Parser
 		Repeatable = 'repeatable',
 		Enum = 'enum',
 		RealPath = 'realpath',
+		Normalizer = 'normalizer',
 		Default = 'default';
 
 	/** @deprecated use Parser::Argument */
@@ -139,9 +140,11 @@ class Parser
 				}
 			}
 
+			$this->checkArg($opt, $arg);
+
 			if (
 				!empty($opt[self::Enum])
-				&& !in_array($arg, $opt[self::Enum], true)
+				&& !in_array(is_array($arg) ? reset($arg) : $arg, $opt[self::Enum], true)
 				&& !(
 					$opt[self::Optional]
 					&& $arg === true
@@ -149,8 +152,6 @@ class Parser
 			) {
 				throw new \Exception("Value of option $name must be " . implode(', or ', $opt[self::Enum]) . '.');
 			}
-
-			$this->checkArg($opt, $arg);
 
 			if (empty($opt[self::Repeatable])) {
 				$params[$name] = $arg;
@@ -187,6 +188,10 @@ class Parser
 
 	public function checkArg(array $opt, &$arg): void
 	{
+		if (isset($opt[self::Normalizer])) {
+			$arg = $opt[self::Normalizer]($arg);
+		}
+
 		if (!empty($opt[self::RealPath])) {
 			$path = realpath($arg);
 			if ($path === false) {

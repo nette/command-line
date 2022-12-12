@@ -194,6 +194,36 @@ test('realpath', function () {
 
 
 
+test('normalizer', function () {
+	$cmd = new Parser('
+		-p param
+	', [
+		'-p' => [Parser::Normalizer => function ($arg) { return "$arg-normalized"; }],
+	]);
+
+	Assert::same(['-p' => 'val-normalized'], $cmd->parse(explode(' ', '-p val')));
+
+
+	$cmd = new Parser('
+		-p <a|b>
+	', [
+		'-p' => [Parser::Normalizer => function () { return 'a'; }],
+	]);
+
+	Assert::same(['-p' => 'a'], $cmd->parse(explode(' ', '-p xxx')));
+
+
+	$cmd = new Parser('
+		-p <a|b>
+	', [
+		'-p' => [Parser::Normalizer => function () { return ['a', 'foo']; }],
+	]);
+
+	Assert::same(['-p' => ['a', 'foo']], $cmd->parse(explode(' ', '-p xxx')));
+});
+
+
+
 test('positional arguments', function () {
 	$cmd = new Parser('', [
 		'pos' => [],
