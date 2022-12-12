@@ -40,7 +40,7 @@ test('default value', function () {
 	$cmd = new Parser('
 		-p
 	', [
-		'-p' => [Parser::VALUE => 123],
+		'-p' => [Parser::Default => 123],
 	]);
 
 	Assert::same(['-p' => 123], $cmd->parse([]));
@@ -116,7 +116,7 @@ test('optional argument', function () {
 	$cmd = new Parser('
 		-p param
 	', [
-		'-p' => [Parser::VALUE => 123],
+		'-p' => [Parser::Default => 123],
 	]);
 
 	Assert::same(['-p' => 123], $cmd->parse([]));
@@ -127,7 +127,7 @@ test('optional argument', function () {
 	$cmd = new Parser('
 		-p param
 	', [
-		'-p' => [Parser::OPTIONAL => true],
+		'-p' => [Parser::Optional => true],
 	]);
 
 	Assert::same(['-p' => null], $cmd->parse([]));
@@ -183,7 +183,7 @@ test('realpath', function () {
 	$cmd = new Parser('
 		-p <path>
 	', [
-		'-p' => [Parser::REALPATH => true],
+		'-p' => [Parser::RealPath => true],
 	]);
 
 	Assert::exception(function () use ($cmd) {
@@ -210,21 +210,21 @@ test('positional arguments', function () {
 	}, Throwable::class, 'Unexpected parameter val2.');
 
 	$cmd = new Parser('', [
-		'pos' => [Parser::REPEATABLE => true],
+		'pos' => [Parser::Repeatable => true],
 	]);
 
 	Assert::same(['pos' => ['val1', 'val2']], $cmd->parse(['val1', 'val2']));
 
 
 	$cmd = new Parser('', [
-		'pos' => [Parser::OPTIONAL => true],
+		'pos' => [Parser::Optional => true],
 	]);
 
 	Assert::same(['pos' => null], $cmd->parse([]));
 
 
 	$cmd = new Parser('', [
-		'pos' => [Parser::VALUE => 'default', Parser::REPEATABLE => true],
+		'pos' => [Parser::Default => 'default', Parser::Repeatable => true],
 	]);
 
 	Assert::same(['pos' => ['default']], $cmd->parse([]));
