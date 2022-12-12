@@ -57,9 +57,11 @@ test('alias', function () {
 	Assert::same(['--param' => true], $cmd->parse(['-p']));
 	Assert::same(['--param' => true], $cmd->parse(['--param']));
 	Assert::same(['--param' => true], $cmd->parse(explode(' ', '-p --param')));
-	Assert::exception(function () use ($cmd) {
-		$cmd->parse(['-p=val']);
-	}, Throwable::class, 'Option --param has not argument.');
+	Assert::exception(
+		fn() => $cmd->parse(['-p=val']),
+		Throwable::class,
+		'Option --param has not argument.',
+	);
 
 	$cmd = new Parser('
 		-p --param
@@ -85,13 +87,17 @@ test('argument', function () {
 	Assert::same(['-p' => 'val'], $cmd->parse(explode(' ', '-p=val')));
 	Assert::same(['-p' => 'val2'], $cmd->parse(explode(' ', '-p val1 -p val2')));
 
-	Assert::exception(function () use ($cmd) {
-		$cmd->parse(['-p']);
-	}, Throwable::class, 'Option -p requires argument.');
+	Assert::exception(
+		fn() => $cmd->parse(['-p']),
+		Throwable::class,
+		'Option -p requires argument.',
+	);
 
-	Assert::exception(function () use ($cmd) {
-		$cmd->parse(['-p', '-a']);
-	}, Throwable::class, 'Option -p requires argument.');
+	Assert::exception(
+		fn() => $cmd->parse(['-p', '-a']),
+		Throwable::class,
+		'Option -p requires argument.',
+	);
 
 
 	$cmd = new Parser('
@@ -156,13 +162,17 @@ test('enumerates', function () {
 	');
 
 	Assert::same(['-p' => null], $cmd->parse([]));
-	Assert::exception(function () use ($cmd) {
-		$cmd->parse(['-p']);
-	}, Throwable::class, 'Option -p requires argument.');
+	Assert::exception(
+		fn() => $cmd->parse(['-p']),
+		Throwable::class,
+		'Option -p requires argument.',
+	);
 	Assert::same(['-p' => 'a'], $cmd->parse(explode(' ', '-p a')));
-	Assert::exception(function () use ($cmd) {
-		$cmd->parse(explode(' ', '-p foo'));
-	}, Throwable::class, 'Value of option -p must be a, or b, or c.');
+	Assert::exception(
+		fn() => $cmd->parse(explode(' ', '-p foo')),
+		Throwable::class,
+		'Value of option -p must be a, or b, or c.',
+	);
 
 
 	$cmd = new Parser('
@@ -172,9 +182,11 @@ test('enumerates', function () {
 	Assert::same(['-p' => null], $cmd->parse([]));
 	Assert::same(['-p' => true], $cmd->parse(['-p']));
 	Assert::same(['-p' => 'a'], $cmd->parse(explode(' ', '-p a')));
-	Assert::exception(function () use ($cmd) {
-		$cmd->parse(explode(' ', '-p foo'));
-	}, Throwable::class, 'Value of option -p must be a, or b, or c.');
+	Assert::exception(
+		fn() => $cmd->parse(explode(' ', '-p foo')),
+		Throwable::class,
+		'Value of option -p must be a, or b, or c.',
+	);
 });
 
 
@@ -186,9 +198,11 @@ test('realpath', function () {
 		'-p' => [Parser::RealPath => true],
 	]);
 
-	Assert::exception(function () use ($cmd) {
-		$cmd->parse(['-p', 'xyz']);
-	}, Throwable::class, "File path 'xyz' not found.");
+	Assert::exception(
+		fn() => $cmd->parse(['-p', 'xyz']),
+		Throwable::class,
+		"File path 'xyz' not found.",
+	);
 	Assert::same(['-p' => __FILE__], $cmd->parse(['-p', __FILE__]));
 });
 
@@ -198,7 +212,7 @@ test('normalizer', function () {
 	$cmd = new Parser('
 		-p param
 	', [
-		'-p' => [Parser::Normalizer => function ($arg) { return "$arg-normalized"; }],
+		'-p' => [Parser::Normalizer => fn($arg) => "$arg-normalized"],
 	]);
 
 	Assert::same(['-p' => 'val-normalized'], $cmd->parse(explode(' ', '-p val')));
@@ -207,7 +221,7 @@ test('normalizer', function () {
 	$cmd = new Parser('
 		-p <a|b>
 	', [
-		'-p' => [Parser::Normalizer => function () { return 'a'; }],
+		'-p' => [Parser::Normalizer => fn() => 'a'],
 	]);
 
 	Assert::same(['-p' => 'a'], $cmd->parse(explode(' ', '-p xxx')));
@@ -216,7 +230,7 @@ test('normalizer', function () {
 	$cmd = new Parser('
 		-p <a|b>
 	', [
-		'-p' => [Parser::Normalizer => function () { return ['a', 'foo']; }],
+		'-p' => [Parser::Normalizer => fn() => ['a', 'foo']],
 	]);
 
 	Assert::same(['-p' => ['a', 'foo']], $cmd->parse(explode(' ', '-p xxx')));
@@ -231,13 +245,17 @@ test('positional arguments', function () {
 
 	Assert::same(['pos' => 'val'], $cmd->parse(['val']));
 
-	Assert::exception(function () use ($cmd) {
-		$cmd->parse([]);
-	}, Throwable::class, 'Missing required argument <pos>.');
+	Assert::exception(
+		fn() => $cmd->parse([]),
+		Throwable::class,
+		'Missing required argument <pos>.',
+	);
 
-	Assert::exception(function () use ($cmd) {
-		$cmd->parse(['val1', 'val2']);
-	}, Throwable::class, 'Unexpected parameter val2.');
+	Assert::exception(
+		fn() => $cmd->parse(['val1', 'val2']),
+		Throwable::class,
+		'Unexpected parameter val2.',
+	);
 
 	$cmd = new Parser('', [
 		'pos' => [Parser::Repeatable => true],
@@ -267,11 +285,15 @@ test('errors', function () {
 		-p
 	');
 
-	Assert::exception(function () use ($cmd) {
-		$cmd->parse(['-x']);
-	}, Throwable::class, 'Unknown option -x.');
+	Assert::exception(
+		fn() => $cmd->parse(['-x']),
+		Throwable::class,
+		'Unknown option -x.',
+	);
 
-	Assert::exception(function () use ($cmd) {
-		$cmd->parse(['val']);
-	}, Throwable::class, 'Unexpected parameter val.');
+	Assert::exception(
+		fn() => $cmd->parse(['val']),
+		Throwable::class,
+		'Unexpected parameter val.',
+	);
 });
