@@ -12,9 +12,4 @@ if (@!include __DIR__ . '/../vendor/autoload.php') {
 
 // configure environment
 Tester\Environment::setup();
-
-
-function test(string $title, Closure $function)
-{
-	$function();
-}
+Tester\Environment::setupFunctions();
