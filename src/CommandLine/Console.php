@@ -40,7 +40,7 @@ class Console
 			'' => '0',
 		];
 		if ($this->useColors) {
-			$c = explode('/', $color ?: '/');
+			$c = explode('/', $color ?? '/');
 			return "\033["
 				. ($c[0] ? $colors[$c[0]] : '')
 				. (empty($c[1]) ? '' : ';4' . substr($colors[$c[1]], -1))
