@@ -22,23 +22,6 @@ class Parser
 		Normalizer = 'normalizer',
 		Default = 'default';
 
-	#[\Deprecated('use Parser::Argument')]
-	public const ARGUMENT = self::Argument;
-
-	#[\Deprecated('use Parser::Optional')]
-	public const OPTIONAL = self::Optional;
-
-	#[\Deprecated('use Parser::Repeatable')]
-	public const REPEATABLE = self::Repeatable;
-
-	#[\Deprecated('use Parser::Enum')]
-	public const ENUM = self::Enum;
-
-	#[\Deprecated('use Parser::RealPath')]
-	public const REALPATH = self::RealPath;
-
-	#[\Deprecated('use Parser::Default')]
-	public const VALUE = self::Default;
 	private const OptionPresent = true;
 
 	/** @var array<string, Option> */
