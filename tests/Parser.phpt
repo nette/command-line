@@ -221,10 +221,10 @@ test('normalizer', function () {
 	$cmd = new Parser('
 		-p <a|b>
 	', [
-		'-p' => [Parser::Normalizer => fn() => 'a'],
+		'-p' => [Parser::Normalizer => fn() => 'xxx'],
 	]);
 
-	Assert::same(['-p' => 'a'], $cmd->parse(explode(' ', '-p xxx')));
+	Assert::same(['-p' => 'xxx'], $cmd->parse(explode(' ', '-p a')));
 
 
 	$cmd = new Parser('
@@ -233,7 +233,7 @@ test('normalizer', function () {
 		'-p' => [Parser::Normalizer => fn() => ['a', 'foo']],
 	]);
 
-	Assert::same(['-p' => ['a', 'foo']], $cmd->parse(explode(' ', '-p xxx')));
+	Assert::same(['-p' => ['a', 'foo']], $cmd->parse(explode(' ', '-p a')));
 });
 
 

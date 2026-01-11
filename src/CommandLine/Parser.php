@@ -143,18 +143,15 @@ class Parser
 				}
 			}
 
-			$this->checkArg($opt, $arg);
-
 			if (
 				!empty($opt[self::Enum])
-				&& !in_array(is_array($arg) ? reset($arg) : $arg, $opt[self::Enum], true)
-				&& !(
-					$opt[self::Optional]
-					&& $arg === true
-				)
+				&& !in_array($arg, $opt[self::Enum], true)
+				&& !($opt[self::Optional] && $arg === true)
 			) {
 				throw new \Exception("Value of option $name must be " . implode(', or ', $opt[self::Enum]) . '.');
 			}
+
+			$this->checkArg($opt, $arg);
 
 			if (empty($opt[self::Repeatable])) {
 				$params[$name] = $arg;
