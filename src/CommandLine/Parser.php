@@ -42,8 +42,7 @@ class Parser
 	#[\Deprecated('use Parser::Default')]
 	public const VALUE = self::Default;
 
-
-	/** @var array[] */
+	/** @var array<string, Option> */
 	private array $options = [];
 
 	/** @var string[] */
@@ -81,10 +80,9 @@ class Parser
 			}
 
 			$name = end($m[1]);
-			$opts = $defaults[$name] ?? [];
-			$this->options[$name] = $opts + [
+			$defaults[$name] = ($defaults[$name] ?? []) + [
 				self::Argument => (bool) end($m[2]),
-				self::Optional => isset($line[2]) || (substr(end($m[2]), 0, 1) === '[') || isset($opts[self::Default]),
+				self::Optional => isset($line[2]) || (str_starts_with(end($m[2]), '[')),
 				self::Repeatable => (bool) end($m[3]),
 				self::Enum => count($enums = explode('|', trim(end($m[2]), '<[]>'))) > 1 ? $enums : null,
 				self::Default => $line[2] ?? null,
@@ -95,12 +93,25 @@ class Parser
 		}
 
 		foreach ($defaults as $name => $opt) {
-			if ($name[0] !== '-') {
+			$default = $opt[self::Default] ?? null;
+			$this->options[$name] = new Option(
+				name: $name,
+				type: match (true) {
+					!($opt[self::Argument] ?? true) => ValueType::None,
+					($opt[self::Optional] ?? false) || $default !== null => ValueType::Optional,
+					default => ValueType::Required,
+				},
+				repeatable: (bool) ($opt[self::Repeatable] ?? null),
+				fallback: $default,
+				normalizer: $opt[self::Normalizer] ?? null,
+				realpath: (bool) ($opt[self::RealPath] ?? false),
+				enum: $opt[self::Enum] ?? null,
+			);
+			if ($this->options[$name]->positional) {
 				$this->positional[] = $name;
 			}
 		}
 
-		$this->options += $defaults;
 		$this->help .= $help;
 		return $this;
 	}
@@ -125,8 +136,9 @@ class Parser
 				}
 
 				$name = current($this->positional);
-				$this->checkArg($this->options[$name], $arg);
-				if (empty($this->options[$name][self::Repeatable])) {
+				$opt = $this->options[$name];
+				$this->checkArg($opt, $arg);
+				if (!$opt->repeatable) {
 					$params[$name] = $arg;
 					next($this->positional);
 				} else {
@@ -147,47 +159,47 @@ class Parser
 
 			$opt = $this->options[$name];
 
-			if ($arg !== true && empty($opt[self::Argument])) {
+			if ($arg !== true && $opt->type === ValueType::None) {
 				throw new \Exception("Option $name has not argument.");
 
-			} elseif ($arg === true && !empty($opt[self::Argument])) {
+			} elseif ($arg === true && $opt->type !== ValueType::None) {
 				if (isset($args[$i]) && $args[$i][0] !== '-') {
 					$arg = $args[$i++];
-				} elseif (empty($opt[self::Optional])) {
+				} elseif ($opt->type === ValueType::Required) {
 					throw new \Exception("Option $name requires argument.");
 				}
 			}
 
 			if (
-				!empty($opt[self::Enum])
-				&& !in_array($arg, $opt[self::Enum], true)
-				&& !($opt[self::Optional] && $arg === true)
+				$opt->enum
+				&& !in_array($arg, $opt->enum, true)
+				&& !($opt->type === ValueType::Optional && $arg === true)
 			) {
-				throw new \Exception("Value of option $name must be " . implode(', or ', $opt[self::Enum]) . '.');
+				throw new \Exception("Value of option $name must be " . implode(', or ', $opt->enum) . '.');
 			}
 
 			$this->checkArg($opt, $arg);
 
-			if (empty($opt[self::Repeatable])) {
+			if (!$opt->repeatable) {
 				$params[$name] = $arg;
 			} else {
 				$params[$name][] = $arg;
 			}
 		}
 
-		foreach ($this->options as $name => $opt) {
-			if (isset($params[$name])) {
+		foreach ($this->options as $opt) {
+			if (isset($params[$opt->name])) {
 				continue;
-			} elseif (isset($opt[self::Default])) {
-				$params[$name] = $opt[self::Default];
-			} elseif ($name[0] !== '-' && empty($opt[self::Optional])) {
-				throw new \Exception("Missing required argument <$name>.");
+			} elseif ($opt->type !== ValueType::Required) {
+				$params[$opt->name] = $opt->fallback;
+			} elseif ($opt->positional) {
+				throw new \Exception("Missing required argument <$opt->name>.");
 			} else {
-				$params[$name] = null;
+				$params[$opt->name] = null;
 			}
 
-			if (!empty($opt[self::Repeatable])) {
-				$params[$name] = (array) $params[$name];
+			if ($opt->repeatable) {
+				$params[$opt->name] = (array) $params[$opt->name];
 			}
 		}
 
@@ -204,13 +216,13 @@ class Parser
 	}
 
 
-	public function checkArg(array $opt, &$arg): void
+	public function checkArg(Option $opt, mixed &$arg): void
 	{
-		if (isset($opt[self::Normalizer])) {
-			$arg = $opt[self::Normalizer]($arg);
+		if ($opt->normalizer) {
+			$arg = ($opt->normalizer)($arg);
 		}
 
-		if (!empty($opt[self::RealPath])) {
+		if ($opt->realpath) {
 			$path = realpath($arg);
 			if ($path === false) {
 				throw new \Exception("File path '$arg' not found.");
