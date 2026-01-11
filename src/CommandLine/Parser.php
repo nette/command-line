@@ -112,6 +112,80 @@ class Parser
 
 
 	/**
+	 * Adds a switch (flag without value), e.g. --foo or -f.
+	 * Parses as true when used, null when not.
+	 */
+	public function addSwitch(
+		string $name,
+		?string $alias = null,
+		bool $repeatable = false,
+	): static
+	{
+		$this->options[$name] = new Option(
+			name: $name,
+			alias: $alias,
+			type: ValueType::None,
+			repeatable: $repeatable,
+		);
+		return $this;
+	}
+
+
+	/**
+	 * Adds an option with value, e.g. --foo json or -f json.
+	 * @param bool $optionalValue  If true, value can be omitted (--foo parses as true)
+	 * @param mixed $fallback      Parsed value when option is not used at all
+	 */
+	public function addOption(
+		string $name,
+		?string $alias = null,
+		bool $optionalValue = false,
+		mixed $fallback = null,
+		?array $enum = null,
+		bool $repeatable = false,
+		?\Closure $normalizer = null,
+	): static
+	{
+		$this->options[$name] = new Option(
+			name: $name,
+			alias: $alias,
+			type: $optionalValue ? ValueType::Optional : ValueType::Required,
+			fallback: $fallback,
+			repeatable: $repeatable,
+			enum: $enum,
+			normalizer: $normalizer,
+		);
+		return $this;
+	}
+
+
+	/**
+	 * Adds a positional argument, e.g. <foo> or [foo].
+	 * @param bool $optional   If true, argument can be omitted
+	 * @param mixed $fallback  Parsed value when argument is not provided
+	 */
+	public function addArgument(
+		string $name,
+		bool $optional = false,
+		mixed $fallback = null,
+		?array $enum = null,
+		bool $repeatable = false,
+		?\Closure $normalizer = null,
+	): static
+	{
+		$this->options[$name] = new Option(
+			name: $name,
+			type: $optional ? ValueType::Optional : ValueType::Required,
+			fallback: $fallback,
+			repeatable: $repeatable,
+			enum: $enum,
+			normalizer: $normalizer,
+		);
+		return $this;
+	}
+
+
+	/**
 	 * Parses command-line arguments and returns associative array of values.
 	 * @param array|null $args  Arguments to parse (defaults to $_SERVER['argv'])
 	 */
