@@ -54,6 +54,9 @@ class Parser
 
 	private string $help;
 
+	/** @var string[] */
+	private array $args;
+
 
 	public function __construct(string $help, array $defaults = [])
 	{
@@ -86,6 +89,8 @@ class Parser
 				$this->positional[] = $name;
 			}
 		}
+
+		$this->args = isset($_SERVER['argv']) ? array_slice($_SERVER['argv'], 1) : [];
 	}
 
 
@@ -95,9 +100,7 @@ class Parser
 	 */
 	public function parse(?array $args = null): array
 	{
-		if ($args === null) {
-			$args = isset($_SERVER['argv']) ? array_slice($_SERVER['argv'], 1) : [];
-		}
+		$args ??= $this->args;
 
 		$params = [];
 		reset($this->positional);
@@ -211,6 +214,6 @@ class Parser
 	 */
 	public function isEmpty(): bool
 	{
-		return !isset($_SERVER['argv']) || count($_SERVER['argv']) < 2;
+		return !$this->args;
 	}
 }
