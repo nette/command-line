@@ -85,6 +85,11 @@ class Parser
 
 		foreach ($defaults as $name => $opt) {
 			$default = $opt[self::Default] ?? null;
+			if ($opt[self::RealPath] ?? false) {
+				$opt[self::Normalizer] = ($opt[self::Normalizer] ?? null)
+					? fn($value) => self::normalizeRealPath($opt[self::Normalizer]($value))
+					: self::normalizeRealPath(...);
+			}
 			$this->options[$name] = new Option(
 				name: $name,
 				alias: $aliases[$name] ?? null,
@@ -96,7 +101,6 @@ class Parser
 				repeatable: (bool) ($opt[self::Repeatable] ?? null),
 				fallback: $default,
 				normalizer: $opt[self::Normalizer] ?? null,
-				realpath: (bool) ($opt[self::RealPath] ?? false),
 				enum: $opt[self::Enum] ?? null,
 			);
 		}
@@ -213,15 +217,20 @@ class Parser
 		if ($opt->normalizer) {
 			$arg = ($opt->normalizer)($arg);
 		}
+	}
 
-		if ($opt->realpath) {
-			$path = realpath($arg);
-			if ($path === false) {
-				throw new \Exception("File path '$arg' not found.");
-			}
 
-			$arg = $path;
+	/**
+	 * Normalizer that resolves path to absolute and validates existence.
+	 */
+	public static function normalizeRealPath(string $value): string
+	{
+		$path = realpath($value);
+		if ($path === false) {
+			throw new \Exception("File path '$value' not found.");
 		}
+
+		return $path;
 	}
 
 

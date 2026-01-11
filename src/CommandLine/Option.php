@@ -32,7 +32,6 @@ final readonly class Option
 		public ?array $enum = null,
 		/** Transform function applied to the value */
 		public ?\Closure $normalizer = null,
-		public bool $realpath = false,
 	) {
 		$this->positional = !str_starts_with($name, '-');
 	}
