@@ -9,8 +9,19 @@ require __DIR__ . '/bootstrap.php';
 
 
 
-test('', function () {
+test('backward compatibility - help in constructor', function () {
 	$cmd = new Parser('
+		-p
+		--p
+		--a-b
+	');
+
+	Assert::same(['-p' => true, '--p' => null, '--a-b' => null], $cmd->parse(['-p']));
+});
+
+
+test('basic options', function () {
+	$cmd = (new Parser)->addFromHelp('
 		-p
 		--p
 		--a-b
@@ -19,7 +30,7 @@ test('', function () {
 	Assert::same(['-p' => null, '--p' => null, '--a-b' => null], $cmd->parse([]));
 	Assert::same(['-p' => true, '--p' => null, '--a-b' => null], $cmd->parse(['-p']));
 
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p  description
 	');
 
@@ -29,7 +40,7 @@ test('', function () {
 
 
 test('default value', function () {
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p  (default: 123)
 	');
 
@@ -37,7 +48,7 @@ test('default value', function () {
 	Assert::same(['-p' => true], $cmd->parse(['-p']));
 
 
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p
 	', [
 		'-p' => [Parser::Default => 123],
@@ -49,7 +60,7 @@ test('default value', function () {
 
 
 test('alias', function () {
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p | --param
 	');
 
@@ -63,13 +74,13 @@ test('alias', function () {
 		'Option --param has not argument.',
 	);
 
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p --param
 	');
 
 	Assert::same(['--param' => true], $cmd->parse(['-p']));
 
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p, --param
 	');
 
@@ -78,7 +89,7 @@ test('alias', function () {
 
 
 test('argument', function () {
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p param
 	');
 
@@ -100,7 +111,7 @@ test('argument', function () {
 	);
 
 
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p=<param>
 	');
 
@@ -110,7 +121,7 @@ test('argument', function () {
 
 
 test('optional argument', function () {
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p [param]
 	');
 
@@ -119,7 +130,7 @@ test('optional argument', function () {
 	Assert::same(['-p' => 'val'], $cmd->parse(explode(' ', '-p val')));
 
 
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p param
 	', [
 		'-p' => [Parser::Default => 123],
@@ -130,7 +141,7 @@ test('optional argument', function () {
 	Assert::same(['-p' => 'val'], $cmd->parse(explode(' ', '-p val')));
 
 
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p param
 	', [
 		'-p' => [Parser::Optional => true],
@@ -144,7 +155,7 @@ test('optional argument', function () {
 
 
 test('repeatable argument', function () {
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p [param]...
 	');
 
@@ -157,7 +168,7 @@ test('repeatable argument', function () {
 
 
 test('enumerates', function () {
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p <a|b|c>
 	');
 
@@ -175,7 +186,7 @@ test('enumerates', function () {
 	);
 
 
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p [a|b|c]
 	');
 
@@ -192,7 +203,7 @@ test('enumerates', function () {
 
 
 test('realpath', function () {
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p <path>
 	', [
 		'-p' => [Parser::RealPath => true],
@@ -209,7 +220,7 @@ test('realpath', function () {
 
 
 test('normalizer', function () {
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p param
 	', [
 		'-p' => [Parser::Normalizer => fn($arg) => "$arg-normalized"],
@@ -218,7 +229,7 @@ test('normalizer', function () {
 	Assert::same(['-p' => 'val-normalized'], $cmd->parse(explode(' ', '-p val')));
 
 
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p <a|b>
 	', [
 		'-p' => [Parser::Normalizer => fn() => 'xxx'],
@@ -227,7 +238,7 @@ test('normalizer', function () {
 	Assert::same(['-p' => 'xxx'], $cmd->parse(explode(' ', '-p a')));
 
 
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p <a|b>
 	', [
 		'-p' => [Parser::Normalizer => fn() => ['a', 'foo']],
@@ -239,7 +250,7 @@ test('normalizer', function () {
 
 
 test('positional arguments', function () {
-	$cmd = new Parser('', [
+	$cmd = (new Parser)->addFromHelp('', [
 		'pos' => [],
 	]);
 
@@ -257,21 +268,21 @@ test('positional arguments', function () {
 		'Unexpected parameter val2.',
 	);
 
-	$cmd = new Parser('', [
+	$cmd = (new Parser)->addFromHelp('', [
 		'pos' => [Parser::Repeatable => true],
 	]);
 
 	Assert::same(['pos' => ['val1', 'val2']], $cmd->parse(['val1', 'val2']));
 
 
-	$cmd = new Parser('', [
+	$cmd = (new Parser)->addFromHelp('', [
 		'pos' => [Parser::Optional => true],
 	]);
 
 	Assert::same(['pos' => null], $cmd->parse([]));
 
 
-	$cmd = new Parser('', [
+	$cmd = (new Parser)->addFromHelp('', [
 		'pos' => [Parser::Default => 'default', Parser::Repeatable => true],
 	]);
 	Assert::same(['pos' => ['default']], $cmd->parse([]));
@@ -280,7 +291,7 @@ test('positional arguments', function () {
 
 
 test('errors', function () {
-	$cmd = new Parser('
+	$cmd = (new Parser)->addFromHelp('
 		-p
 	');
 

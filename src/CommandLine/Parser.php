@@ -52,17 +52,27 @@ class Parser
 	/** @var string[] */
 	private array $positional = [];
 
-	private string $help;
+	private string $help = '';
 
 	/** @var string[] */
 	private array $args;
 
 
-	public function __construct(string $help, array $defaults = [])
+	public function __construct(string $help = '', array $defaults = [])
 	{
-		$this->help = $help;
-		$this->options = $defaults;
+		$this->args = isset($_SERVER['argv']) ? array_slice($_SERVER['argv'], 1) : [];
 
+		if ($help || $defaults) {
+			$this->addFromHelp($help, $defaults);
+		}
+	}
+
+
+	/**
+	 * Extracts option definitions from formatted help text.
+	 */
+	public function addFromHelp(string $help, array $defaults = []): static
+	{
 		preg_match_all('#^[ \t]+(--?\w.*?)(?:  .*\(default: (.*)\)|  |\r|$)#m', $help, $lines, PREG_SET_ORDER);
 		foreach ($lines as $line) {
 			preg_match_all('#(--?\w[\w-]*)(?:[= ](<.*?>|\[.*?]|\w+)(\.{0,3}))?[ ,|]*#A', $line[1], $m);
@@ -71,7 +81,7 @@ class Parser
 			}
 
 			$name = end($m[1]);
-			$opts = $this->options[$name] ?? [];
+			$opts = $defaults[$name] ?? [];
 			$this->options[$name] = $opts + [
 				self::Argument => (bool) end($m[2]),
 				self::Optional => isset($line[2]) || (substr(end($m[2]), 0, 1) === '[') || isset($opts[self::Default]),
@@ -84,13 +94,15 @@ class Parser
 			}
 		}
 
-		foreach ($this->options as $name => $foo) {
+		foreach ($defaults as $name => $opt) {
 			if ($name[0] !== '-') {
 				$this->positional[] = $name;
 			}
 		}
 
-		$this->args = isset($_SERVER['argv']) ? array_slice($_SERVER['argv'], 1) : [];
+		$this->options += $defaults;
+		$this->help .= $help;
+		return $this;
 	}
 
 

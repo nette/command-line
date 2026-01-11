@@ -31,7 +31,8 @@ Every CLI script needs to handle arguments like `--verbose`, `-o output.txt`, or
 ```php
 use Nette\CommandLine\Parser;
 
-$parser = new Parser('
+$parser = new Parser;
+$parser->addFromHelp('
 	-h, --help              Show this help
 	-v, --verbose           Enable verbose mode
 	-o, --output <file>     Output file
@@ -103,7 +104,7 @@ Positional Arguments
 Positional arguments are values without dashes. They can't be defined in help text - use the second parameter instead:
 
 ```php
-$parser = new Parser('
+$parser->addFromHelp('
 	-v, --verbose  Enable verbose mode
 ', [
 	'file' => [],                          // required argument
@@ -122,7 +123,7 @@ Additional Configuration
 Some settings can't be expressed in help text. Pass an array as the second parameter, keyed by option name:
 
 ```php
-$parser = new Parser('
+$parser->addFromHelp('
 	-c, --config <file>   Configuration file
 	-I, --include <path>  Include path
 	-n, --count <num>     Number of iterations
@@ -196,7 +197,8 @@ use Nette\CommandLine\Parser;
 
 require __DIR__ . '/vendor/autoload.php';
 
-$parser = new Parser('
+$parser = new Parser;
+$parser->addFromHelp('
 	-h, --help           Show this help
 	-v, --verbose        Show detailed output
 	-n, --dry-run        Show what would be done
