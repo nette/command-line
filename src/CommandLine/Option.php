@@ -22,6 +22,8 @@ final readonly class Option
 		/** Option name (e.g. '--foo') or argument name (e.g. 'foo') */
 		public string $name,
 		public ValueType $type = ValueType::Required,
+		/** Short alias (e.g. '-f') */
+		public ?string $alias = null,
 		/** Parsed value when option/argument is not provided */
 		public mixed $fallback = null,
 		/** Can be specified multiple times (collects into array) */

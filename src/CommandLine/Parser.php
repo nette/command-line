@@ -44,13 +44,6 @@ class Parser
 
 	/** @var array<string, Option> */
 	private array $options = [];
-
-	/** @var string[] */
-	private array $aliases = [];
-
-	/** @var string[] */
-	private array $positional = [];
-
 	private string $help = '';
 
 	/** @var string[] */
@@ -87,15 +80,14 @@ class Parser
 				self::Enum => count($enums = explode('|', trim(end($m[2]), '<[]>'))) > 1 ? $enums : null,
 				self::Default => $line[2] ?? null,
 			];
-			if ($name !== $m[1][0]) {
-				$this->aliases[$m[1][0]] = $name;
-			}
+			$aliases[$name] = $name !== $m[1][0] ? $m[1][0] : null;
 		}
 
 		foreach ($defaults as $name => $opt) {
 			$default = $opt[self::Default] ?? null;
 			$this->options[$name] = new Option(
 				name: $name,
+				alias: $aliases[$name] ?? null,
 				type: match (true) {
 					!($opt[self::Argument] ?? true) => ValueType::None,
 					($opt[self::Optional] ?? false) || $default !== null => ValueType::Optional,
@@ -107,9 +99,6 @@ class Parser
 				realpath: (bool) ($opt[self::RealPath] ?? false),
 				enum: $opt[self::Enum] ?? null,
 			);
-			if ($this->options[$name]->positional) {
-				$this->positional[] = $name;
-			}
 		}
 
 		$this->help .= $help;
@@ -125,48 +114,51 @@ class Parser
 	{
 		$args ??= $this->args;
 
+		$aliases = $positional = [];
+		foreach ($this->options as $opt) {
+			if ($opt->positional) {
+				$positional[] = $opt;
+			} elseif ($opt->alias !== null) {
+				$aliases[$opt->alias] = $opt;
+			}
+		}
+
 		$params = [];
-		reset($this->positional);
+		reset($positional);
 		$i = 0;
 		while ($i < count($args)) {
 			$arg = $args[$i++];
 			if ($arg[0] !== '-') {
-				if (!current($this->positional)) {
+				if (!current($positional)) {
 					throw new \Exception("Unexpected parameter $arg.");
 				}
 
-				$name = current($this->positional);
-				$opt = $this->options[$name];
+				$opt = current($positional);
 				$this->checkArg($opt, $arg);
 				if (!$opt->repeatable) {
-					$params[$name] = $arg;
-					next($this->positional);
+					$params[$opt->name] = $arg;
+					next($positional);
 				} else {
-					$params[$name][] = $arg;
+					$params[$opt->name][] = $arg;
 				}
 
 				continue;
 			}
 
 			[$name, $arg] = strpos($arg, '=') ? explode('=', $arg, 2) : [$arg, true];
-
-			if (isset($this->aliases[$name])) {
-				$name = $this->aliases[$name];
-
-			} elseif (!isset($this->options[$name])) {
+			$opt = $aliases[$name] ?? $this->options[$name] ?? null;
+			if (!$opt) {
 				throw new \Exception("Unknown option $name.");
 			}
 
-			$opt = $this->options[$name];
-
 			if ($arg !== true && $opt->type === ValueType::None) {
-				throw new \Exception("Option $name has not argument.");
+				throw new \Exception("Option $opt->name has not argument.");
 
 			} elseif ($arg === true && $opt->type !== ValueType::None) {
 				if (isset($args[$i]) && $args[$i][0] !== '-') {
 					$arg = $args[$i++];
 				} elseif ($opt->type === ValueType::Required) {
-					throw new \Exception("Option $name requires argument.");
+					throw new \Exception("Option $opt->name requires argument.");
 				}
 			}
 
@@ -175,15 +167,15 @@ class Parser
 				&& !in_array($arg, $opt->enum, true)
 				&& !($opt->type === ValueType::Optional && $arg === true)
 			) {
-				throw new \Exception("Value of option $name must be " . implode(', or ', $opt->enum) . '.');
+				throw new \Exception("Value of option $opt->name must be " . implode(', or ', $opt->enum) . '.');
 			}
 
 			$this->checkArg($opt, $arg);
 
 			if (!$opt->repeatable) {
-				$params[$name] = $arg;
+				$params[$opt->name] = $arg;
 			} else {
-				$params[$name][] = $arg;
+				$params[$opt->name][] = $arg;
 			}
 		}
 
