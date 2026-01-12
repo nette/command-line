@@ -41,6 +41,7 @@ class Parser
 
 	#[\Deprecated('use Parser::Default')]
 	public const VALUE = self::Default;
+	private const OptionPresent = true;
 
 	/** @var array<string, Option> */
 	private array $options = [];
@@ -138,7 +139,7 @@ class Parser
 				}
 
 				$opt = current($positional);
-				$this->checkArg($opt, $arg);
+				$arg = $this->normalizeValue($opt, $arg);
 				if (!$opt->repeatable) {
 					$params[$opt->name] = $arg;
 					next($positional);
@@ -149,16 +150,16 @@ class Parser
 				continue;
 			}
 
-			[$name, $arg] = strpos($arg, '=') ? explode('=', $arg, 2) : [$arg, true];
+			[$name, $arg] = strpos($arg, '=') ? explode('=', $arg, 2) : [$arg, self::OptionPresent];
 			$opt = $aliases[$name] ?? $this->options[$name] ?? null;
 			if (!$opt) {
 				throw new \Exception("Unknown option $name.");
 			}
 
-			if ($arg !== true && $opt->type === ValueType::None) {
+			if ($arg !== self::OptionPresent && $opt->type === ValueType::None) {
 				throw new \Exception("Option $opt->name has not argument.");
 
-			} elseif ($arg === true && $opt->type !== ValueType::None) {
+			} elseif ($arg === self::OptionPresent && $opt->type !== ValueType::None) {
 				if (isset($args[$i]) && $args[$i][0] !== '-') {
 					$arg = $args[$i++];
 				} elseif ($opt->type === ValueType::Required) {
@@ -166,15 +167,7 @@ class Parser
 				}
 			}
 
-			if (
-				$opt->enum
-				&& !in_array($arg, $opt->enum, true)
-				&& !($opt->type === ValueType::Optional && $arg === true)
-			) {
-				throw new \Exception("Value of option $opt->name must be " . implode(', or ', $opt->enum) . '.');
-			}
-
-			$this->checkArg($opt, $arg);
+			$arg = $this->normalizeValue($opt, $arg);
 
 			if (!$opt->repeatable) {
 				$params[$opt->name] = $arg;
@@ -212,11 +205,13 @@ class Parser
 	}
 
 
-	public function checkArg(Option $opt, mixed &$arg): void
+	private function normalizeValue(Option $opt, mixed $value): mixed
 	{
-		if ($opt->normalizer) {
-			$arg = ($opt->normalizer)($arg);
+		if ($opt->enum && $value !== self::OptionPresent && !in_array($value, $opt->enum, strict: true)) {
+			throw new \Exception("Value of option $opt->name must be " . implode(', or ', $opt->enum) . '.');
 		}
+
+		return $opt->normalizer ? ($opt->normalizer)($value) : $value;
 	}
 
 
