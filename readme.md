@@ -83,40 +83,6 @@ The parser extracts option definitions from formatted help text:
 Each line defines one option. Option names must be separated from descriptions by at least two spaces.
 
 
-Switches and Options
---------------------
-
-**Switches** are flags without values, defined as `--verbose` or `-v, --verbose` in help text. They parse as `true` when present, `null` when absent.
-
-**Options** accept values. Use `<value>` for required value, `[value]` for optional:
-
-```
---output <file>   →  value required, --output alone throws exception
---format [type]   →  value optional, --format alone parses as true
-```
-
-The option itself is always optional - not using it returns null (or the fallback if `(default: x)` is specified).
-
-
-Positional Arguments
---------------------
-
-Positional arguments are values without dashes. They can't be defined in help text - use the second parameter instead:
-
-```php
-$parser->addFromHelp('
-	-v, --verbose  Enable verbose mode
-', [
-	'file' => [],                          // required argument
-	'output' => [Parser::Optional => true], // optional argument
-]);
-```
-
-This accepts commands like `script.php input.txt` or `script.php -v input.txt output.txt`.
-
-Arguments can appear anywhere on the command line - they don't have to come after options.
-
-
 Additional Configuration
 ------------------------
 
@@ -151,12 +117,178 @@ Available keys:
 | `Parser::Enum` | Array of allowed values |
 
 
+Fluent API
+==========
+
+When you need more control over option definitions, use the fluent API with `addSwitch()`, `addOption()`, and `addArgument()` methods. This approach gives you access to all features including normalizers, enums, and precise control over each parameter:
+
+```php
+use Nette\CommandLine\Parser;
+
+$parser = new Parser;
+$parser
+	->addSwitch('--verbose', '-v')
+	->addOption('--output', '-o')
+	->addArgument('file');
+
+$args = $parser->parse();
+```
+
+By default, `parse()` reads from `$_SERVER['argv']`. You can pass a custom array for testing:
+
+```php
+$args = $parser->parse(['--verbose', '-o', 'out.txt', 'input.txt']);
+```
+
+
+Switches, Options, and Arguments
+--------------------------------
+
+There are three types of command-line inputs:
+
+**Switches** are flags without values, like `--verbose` or `-v`. They parse as `true` when present, `null` when absent:
+
+```php
+$parser->addSwitch('--verbose', '-v');
+// --verbose  → true
+// -v         → true
+// (not used) → null
+```
+
+**Options** accept values, like `--output file.txt`. The value can be separated by space or `=`:
+
+```php
+$parser->addOption('--output', '-o');
+// --output file.txt    → 'file.txt'
+// --output=file.txt    → 'file.txt'
+// -o file.txt          → 'file.txt'
+// --output             → throws exception (value required)
+// (not used)           → null
+```
+
+Note that the option itself is always optional - not using it returns null. However, when used, the value is required by default. Set `optionalValue: true` to allow the option without a value (parses as `true`):
+
+```php
+$parser->addOption('--format', '-f', optionalValue: true);
+// --format json        → 'json'
+// --format             → true
+// (not used)           → null
+```
+
+When the same option is used multiple times without `repeatable: true`, the last value wins:
+
+```php
+$parser->addOption('--output', '-o');
+// -o first.txt -o second.txt  → 'second.txt'
+```
+
+**Arguments** are positional values without dashes. By default they are required. Set `optional: true` to make them optional:
+
+```php
+$parser->addArgument('input');
+// script.php file.txt  → 'file.txt'
+// (not used)           → throws exception
+
+$parser->addArgument('output', optional: true);
+// (not used)           → null
+
+$parser->addArgument('output', optional: true, fallback: 'out.txt');
+// (not used)           → 'out.txt'
+```
+
+Use `fallback` to specify the value when an option or argument is not provided. For options with `optionalValue: true`, note that using the option without a value still parses as `true`, while the fallback is used only when the option is not present at all:
+
+```php
+$parser->addOption('--format', '-f', optionalValue: true, fallback: 'json');
+// --format xml  → 'xml'
+// --format      → true (option used without value)
+// (not used)    → 'json' (fallback)
+```
+
+Arguments can appear anywhere on the command line - they don't have to come after options:
+
+```php
+// all of these are equivalent:
+// script.php --verbose input.txt
+// script.php input.txt --verbose
+```
+
+
+Restricting Values with Enum
+----------------------------
+
+Limit accepted values to a specific set:
+
+```php
+$parser->addOption('--format', '-f', enum: ['json', 'xml', 'csv']);
+// --format yaml  → throws "Value of option --format must be json, or xml, or csv."
+```
+
+
+Repeatable Options
+------------------
+
+Set `repeatable: true` to collect multiple values into an array:
+
+```php
+$parser->addOption('--include', '-I', repeatable: true);
+// -I src -I lib  → ['src', 'lib']
+// (not used)     → []
+
+$parser->addArgument('files', optional: true, repeatable: true);
+// a.txt b.txt    → ['a.txt', 'b.txt']
+```
+
+
+Transforming Values
+-------------------
+
+Use `normalizer` to transform parsed values:
+
+```php
+$parser->addOption('--count', normalizer: fn($v) => (int) $v);
+// --count 42  → 42 (integer)
+```
+
+For file path validation, use the built-in `normalizeRealPath`:
+
+```php
+$parser->addOption('--config', normalizer: Parser::normalizeRealPath(...));
+// --config app.ini     → '/full/path/to/app.ini'
+// --config missing.ini → throws "File path 'missing.ini' not found."
+```
+
+
+Mixing Both Approaches
+----------------------
+
+You can combine `addFromHelp()` with fluent methods when you need normalizers for some options:
+
+```php
+$parser
+	->addFromHelp('
+		-v, --verbose  Enable verbose mode
+		-q, --quiet    Suppress output
+	')
+	->addOption('--config', '-c', normalizer: Parser::normalizeRealPath(...),
+		description: 'Configuration file')
+	->addArgument('input', description: 'Input file');
+```
+
+
 Error Handling
 --------------
 
 The parser throws `\Exception` for invalid input:
 
 ```php
+use Nette\CommandLine\Parser;
+
+$parser = new Parser;
+$parser
+	->addOption('--output', '-o')
+	->addArgument('file');
+
 try {
 	$args = $parser->parse();
 } catch (\Exception $e) {
@@ -175,7 +307,7 @@ Common error messages:
 | `Unexpected parameter foo.` | Extra positional argument |
 | `Value of option --format must be json, or xml.` | Value not in enum |
 
-Use `isEmpty()` to check if no command-line arguments were provided:
+Use `isEmpty()` to check if no command-line arguments were provided (i.e., user ran just `script.php` with nothing after it):
 
 ```php
 if ($parser->isEmpty()) {
@@ -185,10 +317,46 @@ if ($parser->isEmpty()) {
 ```
 
 
+Handling --help and --version
+-----------------------------
+
+When your script has required arguments, running `script.php --help` would normally fail because the required argument is missing. Use `parseOnly()` to check for info options first:
+
+```php
+$parser = new Parser;
+$parser
+	->addSwitch('--help', '-h')
+	->addSwitch('--version', '-V')
+	->addArgument('input');  // required
+
+// First, check info options (no validation, no exceptions)
+$info = $parser->parseOnly(['--help', '--version']);
+
+if ($info['--help']) {
+	$parser->help();
+	exit;
+}
+
+if ($info['--version']) {
+	echo "1.0.0\n";
+	exit;
+}
+
+// Now do full parsing with validation
+$args = $parser->parse();
+```
+
+The `parseOnly()` method:
+- Parses only the specified options, ignoring everything else
+- Respects aliases (`-h` → `--help`)
+- Never throws exceptions
+- Returns `null` for options that weren't used
+
+
 Complete Example
 ================
 
-Here's a practical script showing the typical usage pattern:
+Here's a real-world file converter script combining Parser and Console:
 
 ```php
 #!/usr/bin/env php
@@ -198,32 +366,32 @@ use Nette\CommandLine\Parser;
 require __DIR__ . '/vendor/autoload.php';
 
 $parser = new Parser;
-$parser->addFromHelp('
-	-h, --help           Show this help
-	-v, --verbose        Show detailed output
-	-n, --dry-run        Show what would be done
-	-f, --format [type]  Output format (default: json)
-	-o, --output <file>  Output file
-', [
-	'--format' => [
-		Parser::Enum => ['json', 'xml', 'csv'],
-	],
-	'input' => [
-		Parser::RealPath => true,  // required positional argument
-	],
-]);
+$parser
+	->addFromHelp('
+		-h, --help           Show this help
+		-v, --verbose        Show detailed output
+		-n, --dry-run        Show what would be done
+		-f, --format [type]  Output format (default: json)
+		-o, --output <file>  Output file
+	', [
+		'--format' => [
+			Parser::Enum => ['json', 'xml', 'csv'],
+		],
+	])
+	->addArgument('input', normalizer: Parser::normalizeRealPath(...));
+
+// Handle --help before validation (avoids "missing argument" error)
+if ($parser->isEmpty() || $parser->parseOnly(['--help'])['--help']) {
+	echo "Usage: convert [options] <input>\n\n";
+	$parser->help();
+	exit;
+}
 
 try {
 	$args = $parser->parse();
 } catch (\Exception $e) {
 	fwrite(STDERR, "Error: {$e->getMessage()}\n");
 	exit(1);
-}
-
-if ($parser->isEmpty() || $args['--help']) {
-	echo "Usage: convert [options] <input>\n\n";
-	$parser->help();
-	exit;
 }
 
 if ($args['--verbose']) {
@@ -244,3 +412,4 @@ The script accepts commands like:
 - `convert input.txt` - convert with defaults
 - `convert -v --format xml input.txt` - verbose, XML format
 - `convert -o result.txt input.txt` - specify output file
+- `convert --help` - show help (works even without input file)
