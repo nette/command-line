@@ -89,6 +89,10 @@ class Parser
 	}
 
 
+	/**
+	 * Parses command-line arguments and returns associative array of values.
+	 * @param array|null $args  Arguments to parse (defaults to $_SERVER['argv'])
+	 */
 	public function parse(?array $args = null): array
 	{
 		if ($args === null) {
@@ -179,6 +183,9 @@ class Parser
 	}
 
 
+	/**
+	 * Prints help text to stdout.
+	 */
 	public function help(): void
 	{
 		echo $this->help;
@@ -202,6 +209,9 @@ class Parser
 	}
 
 
+	/**
+	 * Returns true if no command-line arguments were provided.
+	 */
 	public function isEmpty(): bool
 	{
 		return !isset($_SERVER['argv']) || count($_SERVER['argv']) < 2;
