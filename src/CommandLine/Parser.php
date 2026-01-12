@@ -271,6 +271,53 @@ class Parser
 
 
 	/**
+	 * Parses only specified options, ignoring everything else.
+	 * No validation, no exceptions. Useful for early-exit options like --help.
+	 * @param  string[]  $names  Option names to parse (e.g., ['--help', '--version'])
+	 * @return array<string, mixed>  Parsed values (null if option not used)
+	 */
+	public function parseOnly(array $names, ?array $args = null): array
+	{
+		$args ??= $this->args;
+		$lookup = [];
+		foreach ($names as $name) {
+			$opt = $this->options[$name] ?? null;
+			if ($opt) {
+				$lookup[$name] = $opt;
+				if ($opt->alias !== null) {
+					$lookup[$opt->alias] = $opt;
+				}
+			}
+		}
+
+		$params = array_fill_keys($names, null);
+		$i = 0;
+		while ($i < count($args)) {
+			$arg = $args[$i++];
+			if ($arg[0] !== '-') {
+				continue;
+			}
+
+			[$name, $value] = strpos($arg, '=') ? explode('=', $arg, 2) : [$arg, self::OptionPresent];
+			$opt = $lookup[$name] ?? null;
+			if (!$opt) {
+				continue;
+			}
+
+			if ($value === self::OptionPresent && $opt->type !== ValueType::None) {
+				if (isset($args[$i]) && $args[$i][0] !== '-') {
+					$value = $args[$i++];
+				}
+			}
+
+			$params[$opt->name] = $value;
+		}
+
+		return $params;
+	}
+
+
+	/**
 	 * Prints help text to stdout.
 	 */
 	public function help(): void
