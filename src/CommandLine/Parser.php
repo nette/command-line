@@ -45,10 +45,11 @@ class Parser
 	private array $options = [];
 	private string $help = '';
 
-	/** @var string[] */
+	/** @var list<string> */
 	private array $args;
 
 
+	/** @param array<string, array<string, mixed>> $defaults */
 	public function __construct(string $help = '', array $defaults = [])
 	{
 		$this->args = isset($_SERVER['argv']) ? array_slice($_SERVER['argv'], 1) : [];
@@ -61,6 +62,7 @@ class Parser
 
 	/**
 	 * Extracts option definitions from formatted help text.
+	 * @param array<string, array<string, mixed>> $defaults
 	 */
 	public function addFromHelp(string $help, array $defaults = []): static
 	{
@@ -131,8 +133,10 @@ class Parser
 
 	/**
 	 * Adds an option with value, e.g. --foo json or -f json.
-	 * @param bool $optionalValue  If true, value can be omitted (--foo parses as true)
-	 * @param mixed $fallback      Parsed value when option is not used at all
+	 * @param bool  $optionalValue  If true, value can be omitted (--foo parses as true)
+	 * @param mixed  $fallback      Parsed value when option is not used at all
+	 * @param ?list<string>  $enum
+	 * @param ?(\Closure(mixed): mixed)  $normalizer
 	 */
 	public function addOption(
 		string $name,
@@ -159,8 +163,10 @@ class Parser
 
 	/**
 	 * Adds a positional argument, e.g. <foo> or [foo].
-	 * @param bool $optional   If true, argument can be omitted
-	 * @param mixed $fallback  Parsed value when argument is not provided
+	 * @param bool  $optional   If true, argument can be omitted
+	 * @param mixed  $fallback  Parsed value when argument is not provided
+	 * @param ?list<string>  $enum
+	 * @param ?(\Closure(mixed): mixed)  $normalizer
 	 */
 	public function addArgument(
 		string $name,
@@ -185,7 +191,8 @@ class Parser
 
 	/**
 	 * Parses command-line arguments and returns associative array of values.
-	 * @param array|null $args  Arguments to parse (defaults to $_SERVER['argv'])
+	 * @param ?list<string>  $args  Arguments to parse (defaults to $_SERVER['argv'])
+	 * @return array<string, mixed>
 	 */
 	public function parse(?array $args = null): array
 	{
@@ -271,7 +278,8 @@ class Parser
 	/**
 	 * Parses only specified options, ignoring everything else.
 	 * No validation, no exceptions. Useful for early-exit options like --help.
-	 * @param  string[]  $names  Option names to parse (e.g., ['--help', '--version'])
+	 * @param  list<string>  $names  Option names to parse (e.g., ['--help', '--version'])
+	 * @param  ?list<string>  $args
 	 * @return array<string, mixed>  Parsed values (null if option not used)
 	 */
 	public function parseOnly(array $names, ?array $args = null): array
