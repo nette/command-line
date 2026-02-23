@@ -52,7 +52,7 @@ class Parser
 	/** @param array<string, array<string, mixed>> $defaults */
 	public function __construct(string $help = '', array $defaults = [])
 	{
-		$this->args = isset($_SERVER['argv']) ? array_slice($_SERVER['argv'], 1) : [];
+		$this->args = array_values(array_map(strval(...), isset($_SERVER['argv']) ? array_slice($_SERVER['argv'], 1) : []));
 
 		if ($help || $defaults) {
 			$this->addFromHelp($help, $defaults);
@@ -73,12 +73,12 @@ class Parser
 				throw new \InvalidArgumentException("Unable to parse '$line[1]'.");
 			}
 
-			$name = end($m[1]);
+			$name = (string) end($m[1]);
 			$defaults[$name] = ($defaults[$name] ?? []) + [
 				self::Argument => (bool) end($m[2]),
-				self::Optional => isset($line[2]) || (str_starts_with(end($m[2]), '[')),
+				self::Optional => isset($line[2]) || (str_starts_with((string) end($m[2]), '[')),
 				self::Repeatable => (bool) end($m[3]),
-				self::Enum => count($enums = explode('|', trim(end($m[2]), '<[]>'))) > 1 ? $enums : null,
+				self::Enum => count($enums = explode('|', trim((string) end($m[2]), '<[]>'))) > 1 ? $enums : null,
 				self::Default => $line[2] ?? null,
 			];
 			$aliases[$name] = $name !== $m[1][0] ? $m[1][0] : null;
