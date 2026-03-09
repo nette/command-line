@@ -28,6 +28,13 @@ class Console
 	}
 
 
+	/**
+	 * Wraps string in ANSI color codes, or returns plain string when colors are disabled.
+	 * Color format: 'foreground' or 'foreground/background' (e.g. 'red', 'white/blue').
+	 * When $s is null, emits the escape code without a reset sequence.
+	 * Available colors: black, gray, silver, white, navy, blue, green, lime,
+	 * teal, aqua, maroon, red, purple, fuchsia, olive, yellow.
+	 */
 	public function color(?string $color, ?string $s = null): string
 	{
 		$colors = [
@@ -50,6 +57,11 @@ class Console
 	}
 
 
+	/**
+	 * Detects whether the terminal supports ANSI colors.
+	 * Returns false when NO_COLOR is set, or when not running in a CLI TTY.
+	 * On Windows, checks VT100 support via sapi_windows_vt100_support().
+	 */
 	public static function detectColors(): bool
 	{
 		return (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg')

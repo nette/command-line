@@ -343,7 +343,7 @@ class Parser
 
 
 	/**
-	 * Normalizer that resolves path to absolute and validates existence.
+	 * Resolves a path to its absolute form. Throws if the path does not exist.
 	 */
 	public static function normalizeRealPath(string $value): string
 	{
