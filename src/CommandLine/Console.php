@@ -80,4 +80,28 @@ class Console
 		return (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg')
 			&& @stream_isatty(STDOUT); // @ may trigger error 'cannot cast a filtered stream on this system'
 	}
+
+
+	/**
+	 * Returns the width of the terminal in columns, or 80 as fallback.
+	 */
+	public static function getTerminalWidth(): int
+	{
+		if ($s = getenv('COLUMNS')) {
+			return (int) $s;
+
+		} elseif (PHP_OS_FAMILY === 'Windows') {
+			@exec('mode con 2>NUL', $lines);
+			$values = [];
+			foreach ($lines ?? [] as $line) {
+				if (preg_match('#:\s+(\d+)\s*$#', $line, $m)) {
+					$values[] = (int) $m[1];
+				}
+			}
+			return $values[1] ?? 80; // second numeric value is columns (locale-independent)
+
+		} else {
+			return (int) @exec('tput cols 2>/dev/null') ?: 80;
+		}
+	}
 }
