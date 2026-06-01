@@ -191,7 +191,6 @@ class Parser
 		}
 
 		$params = [];
-		reset($positional);
 		$i = 0;
 		while ($i < count($args)) {
 			$arg = $args[$i++];
