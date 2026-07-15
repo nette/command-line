@@ -1,6 +1,9 @@
 presets:
 	- nette
 
+rules:
+	group-import: {minImports: 2}
+
 paths:
 	- src
 	- tests
@@ -14,5 +17,7 @@ fileExtensions:
 
 overrides:
 	- paths: [src]
-	  presets: [optimizations]
+	  groups: [optimized-calls]
 	  nameResolution: certain
+	  rules:
+	  	name-fallback: {optimizedFunctions: qualified, optimizedConstants: qualified}
