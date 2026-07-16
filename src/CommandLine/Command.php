@@ -1,0 +1,220 @@
+<?php declare(strict_types=1);
+
+/**
+ * This file is part of the Nette Framework (https://nette.org)
+ * Copyright (c) 2004 David Grudl (https://davidgrudl.com)
+ */
+
+namespace Nette\CommandLine;
+
+use Nette\CommandLine\Help\{Section, Text};
+use Nette\CommandLine\Parameters\{Argument, Flag, Option, Parameter};
+use function func_get_args, is_string;
+
+
+/**
+ * The definition of a command line: a program with the parameters it takes and the texts of its help.
+ */
+final class Command
+{
+	/** @var ?list<string>  the usage lines written by hand; null generates them from the definitions */
+	public readonly ?array $usage;
+
+	/** @var list<Flag|Option|Argument|Section|Text>  in the order the help shows them */
+	private array $items = [];
+
+
+	/**
+	 * @param  string|list<string>|null  $usage
+	 */
+	public function __construct(
+		public readonly ?string $name = null,
+		public readonly ?string $description = null,
+		string|array|null $usage = null,
+	) {
+		$this->usage = is_string($usage) ? [$usage] : $usage;
+	}
+
+
+	/** A copy would share the parameters, which know the original as their command. */
+	private function __clone()
+	{
+	}
+
+
+	/**
+	 * Adds a flag, a named parameter without a value such as --verbose. It parses as true when used, null when not.
+	 * @param  ?string  $alias  a short name such as -v
+	 * @param  bool  $standalone  answers on its own like --help: other flags as given, nothing else checked or converted
+	 * @param  bool  $negatable  --no-name turns a flag with a long name off, which parses as false
+	 * @param  ?string  $defaultDescription  the default in words for the help; a blank one leaves it out
+	 */
+	public function addFlag(
+		string $name,
+		?string $description = null,
+		?string $alias = null,
+		bool $standalone = false,
+		bool $negatable = false,
+		mixed $default = null,
+		?string $defaultDescription = null,
+		bool $repeatable = false,
+		bool $hidden = false,
+	): Flag
+	{
+		$flag = new Flag($this, ...func_get_args());
+		$this->assertNamesAvailable([$flag->name, $flag->alias, $flag->negation]);
+		return $this->items[] = $flag;
+	}
+
+
+	/**
+	 * Adds an option with a value such as --output <file>.
+	 * @param  ?string  $alias  a short name such as -o
+	 * @param  ?string  $valueName  names the value in the help, e.g. 'file' shows as --output <file>, and replaces the enum values there
+	 * @param  bool  $valueOptional  usable without its value, then true; the next token is its value only if it is an enum value
+	 * @param  list<non-empty-string>|class-string<\BackedEnum>|null  $enum  the allowed values, or a backed enum to parse the value into
+	 * @param  ?(\Closure(mixed): mixed)  $normalizer  converts the value and reports a bad one by throwing
+	 * @param  ?string  $defaultDescription  the default in words for the help; a blank one leaves it out
+	 */
+	public function addOption(
+		string $name,
+		?string $description = null,
+		?string $alias = null,
+		?string $valueName = null,
+		bool $valueOptional = false,
+		array|string|null $enum = null,
+		?\Closure $normalizer = null,
+		mixed $default = null,
+		?string $defaultDescription = null,
+		bool $repeatable = false,
+		bool $hidden = false,
+	): Option
+	{
+		$option = new Option($this, ...func_get_args());
+		$this->assertNamesAvailable([$option->name, $option->alias]);
+		return $this->items[] = $option;
+	}
+
+
+	/**
+	 * Adds a positional argument such as <input>.
+	 * @param  list<non-empty-string>|class-string<\BackedEnum>|null  $enum  the allowed values, or a backed enum to parse the value into
+	 * @param  ?(\Closure(mixed): mixed)  $normalizer  converts the value and reports a bad one by throwing
+	 * @param  ?string  $defaultDescription  the default in words for the help; a blank one leaves it out
+	 */
+	public function addArgument(
+		string $name,
+		?string $description = null,
+		bool $optional = false,
+		array|string|null $enum = null,
+		?\Closure $normalizer = null,
+		mixed $default = null,
+		?string $defaultDescription = null,
+		bool $repeatable = false,
+		bool $hidden = false,
+	): Argument
+	{
+		$argument = new Argument($this, ...func_get_args());
+
+		$arguments = $this->getArguments();
+		$previous = end($arguments) ?: null;
+		if (array_filter($arguments, fn(Argument $other) => $other->name === $name)) {
+			throw new \InvalidArgumentException("Argument '$name' is already defined.");
+		} elseif (!$optional && $default !== null) {
+			throw new \InvalidArgumentException("Argument '$name' is required, so its default value would never be used. Mark it as optional.");
+		} elseif ($previous?->repeatable) {
+			throw new \InvalidArgumentException("Argument '$name' cannot follow repeatable argument '$previous->name', which consumes all remaining values.");
+		} elseif ($previous?->optional && !$optional) {
+			throw new \InvalidArgumentException("Required argument '$name' cannot follow optional argument '$previous->name'.");
+		}
+
+		return $this->items[] = $argument;
+	}
+
+
+	/**
+	 * Adds a heading to the help; the definitions that follow belong under it.
+	 */
+	public function addSection(string $title): static
+	{
+		$this->items[] = new Section($title);
+		return $this;
+	}
+
+
+	/**
+	 * Adds a text at this place of the help, printed as it is: not wrapped, collapsed or colored.
+	 */
+	public function addText(string $text): static
+	{
+		$this->items[] = new Text($text);
+		return $this;
+	}
+
+
+	/**
+	 * Returns the parameter by its name; given a class, it also checks the parameter is of that kind.
+	 * @template T of Parameter
+	 * @param  class-string<T>  $type
+	 * @return T
+	 */
+	public function getParameter(string $name, string $type = Parameter::class): Parameter
+	{
+		foreach ($this->getParameters() as $parameter) {
+			if ($parameter->name === $name) {
+				return $parameter instanceof $type
+					? $parameter
+					: throw new \InvalidArgumentException("Parameter '$name' is " . $parameter::class . ", not $type.");
+			}
+		}
+
+		throw new \InvalidArgumentException("Parameter '$name' is not defined.");
+	}
+
+
+	/** @return list<Flag|Option|Argument> */
+	public function getParameters(): array
+	{
+		return array_values(array_filter($this->items, fn($item) => $item instanceof Parameter));
+	}
+
+
+	/** @return list<Flag|Option>  the named parameters, flags included */
+	public function getOptions(): array
+	{
+		return array_values(array_filter($this->items, fn($item) => $item instanceof Flag || $item instanceof Option));
+	}
+
+
+	/** @return list<Argument> */
+	public function getArguments(): array
+	{
+		return array_values(array_filter($this->items, fn($item) => $item instanceof Argument));
+	}
+
+
+	/**
+	 * @return list<Flag|Option|Argument|Section|Text>  in the order the help shows them
+	 * @internal
+	 */
+	public function getItems(): array
+	{
+		return $this->items;
+	}
+
+
+	/**
+	 * Refuses names, aliases or negations taken by an option of this command.
+	 * @param  list<?string>  $names
+	 */
+	private function assertNamesAvailable(array $names): void
+	{
+		foreach ($this->getOptions() as $other) {
+			foreach ($names as $name) {
+				if ($name !== null && $other->hasName($name)) {
+					throw new \InvalidArgumentException("Option '$name' is already defined.");
+				}
+			}
+		}
+	}
+}
