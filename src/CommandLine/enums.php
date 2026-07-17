@@ -9,11 +9,14 @@ namespace Nette\CommandLine;
 
 
 /**
- * Describes value requirement for command-line options and arguments.
+ * What was wrong with the command line.
  */
-enum ValueType
+enum ParseFailure
 {
-	case None;      // --foo (no value, switch)
-	case Required;  // <file>, --foo <file> (value required)
-	case Optional;  // [file], --foo [file] (value optional)
+	case UnknownOption;
+	case MissingValue;
+	case UnexpectedValue;
+	case MissingArgument;
+	case UnexpectedArgument;
+	case InvalidValue;
 }
