@@ -8,19 +8,25 @@
 namespace Nette\CommandLine;
 
 use Nette\CommandLine\Help\{Section, Text};
-use Nette\CommandLine\Parameters\{Argument, Flag, Option, Parameter};
+use Nette\CommandLine\Parameters\{Argument, Flag, NameSyntax, Option, Parameter};
 use function func_get_args, is_string;
 
 
 /**
- * The definition of a command line: a program with the parameters it takes and the texts of its help.
+ * The definition of a command line: a program or one of its commands, with parameters, subcommands and the texts
+ * of its help. Commands form a tree whose root is the program.
  */
 final class Command
 {
 	/** @var ?list<string>  the usage lines written by hand; null generates them from the definitions */
 	public readonly ?array $usage;
 
-	/** @var list<Flag|Option|Argument|Section|Text>  in the order the help shows them */
+	/** the command line has to name one of the commands below */
+	public readonly bool $commandRequired;
+
+	private ?self $parent = null;
+
+	/** @var list<Flag|Option|Argument|self|Section|Text>  in the order the help shows them */
 	private array $items = [];
 
 
@@ -31,12 +37,14 @@ final class Command
 		public readonly ?string $name = null,
 		public readonly ?string $description = null,
 		string|array|null $usage = null,
+		bool $commandRequired = false,
 	) {
 		$this->usage = is_string($usage) ? [$usage] : $usage;
+		$this->commandRequired = $commandRequired;
 	}
 
 
-	/** A copy would share the parameters, which know the original as their command. */
+	/** A copy would share the subcommands and parameters, which know the original as their command. */
 	private function __clone()
 	{
 	}
@@ -92,6 +100,14 @@ final class Command
 	{
 		$option = new Option($this, ...func_get_args());
 		$this->assertNamesAvailable([$option->name, $option->alias]);
+		if ($option->valueOptional) {
+			foreach ($this->collectDescendants() as $command) {
+				if (in_array($command->name, $option->enum ?? [], true)) {
+					throw new \InvalidArgumentException("Value '$command->name' of option $option->name is the name of command '{$command->getFullName()}', which it would take.");
+				}
+			}
+		}
+
 		return $this->items[] = $option;
 	}
 
@@ -118,7 +134,9 @@ final class Command
 
 		$arguments = $this->getArguments();
 		$previous = end($arguments) ?: null;
-		if (array_filter($arguments, fn(Argument $other) => $other->name === $name)) {
+		if ($this->getCommands()) {
+			throw new \InvalidArgumentException("{$this->getLabel()} has subcommands, so it cannot take argument '$name'.");
+		} elseif (array_filter($arguments, fn(Argument $other) => $other->name === $name)) {
 			throw new \InvalidArgumentException("Argument '$name' is already defined.");
 		} elseif (!$optional && $default !== null) {
 			throw new \InvalidArgumentException("Argument '$name' is required, so its default value would never be used. Mark it as optional.");
@@ -129,6 +147,52 @@ final class Command
 		}
 
 		return $this->items[] = $argument;
+	}
+
+
+	/**
+	 * Adds a command such as check in "tool check src". It inherits the options of this command.
+	 * @param  string|list<string>|null  $usage  the usage line(s) written by hand; null generates them from the definitions
+	 * @param  bool  $commandRequired  the command line has to name one of the commands below
+	 */
+	public function addCommand(
+		string $name,
+		?string $description = null,
+		string|array|null $usage = null,
+		bool $commandRequired = false,
+	): self
+	{
+		return $this->attach(new self(...func_get_args()));
+	}
+
+
+	/**
+	 * Attaches a command once its name and options pass the checks against the path, so a refused one leaves the tree
+	 * as it was.
+	 */
+	private function attach(self $command): self
+	{
+		if ($this->getArguments()) {
+			throw new \InvalidArgumentException("{$this->getLabel()} takes arguments, so it cannot have subcommands.");
+		}
+
+		$name = (string) $command->name;
+		NameSyntax::assertWordName($name, 'Command');
+		if (array_filter($this->getCommands(), fn(self $other) => $other->name === $name)) {
+			throw new \InvalidArgumentException("Command '$name' is already defined.");
+		}
+
+		foreach ($this->getPath() as $level) {
+			foreach ($level->getOptions() as $option) {
+				if ($option instanceof Option && $option->valueOptional && in_array($name, $option->enum ?? [], true)) {
+					throw new \InvalidArgumentException("Command '$name' is a value of option $option->name, which would take it.");
+				}
+			}
+		}
+
+		$command->parent = $this;
+		$this->items[] = $command;
+		return $command;
 	}
 
 
@@ -149,6 +213,55 @@ final class Command
 	{
 		$this->items[] = new Text($text);
 		return $this;
+	}
+
+
+	public function getParent(): ?self
+	{
+		return $this->parent;
+	}
+
+
+	public function getRoot(): self
+	{
+		return $this->parent?->getRoot() ?? $this;
+	}
+
+
+	/**
+	 * @return list<self>  the commands from the root down to this one
+	 */
+	public function getPath(): array
+	{
+		return [...($this->parent?->getPath() ?? []), $this];
+	}
+
+
+	/**
+	 * Returns the names of the commands below the root down to this one, e.g. 'remote add'; empty for the root.
+	 */
+	public function getFullName(): string
+	{
+		return implode(' ', array_map(fn(self $command) => (string) $command->name, array_slice($this->getPath(), 1)));
+	}
+
+
+	public function getCommand(string $name): self
+	{
+		foreach ($this->getCommands() as $command) {
+			if ($command->name === $name) {
+				return $command;
+			}
+		}
+
+		throw new \InvalidArgumentException("Command '$name' is not defined.");
+	}
+
+
+	/** @return list<self> */
+	public function getCommands(): array
+	{
+		return array_values(array_filter($this->items, fn($item) => $item instanceof self));
 	}
 
 
@@ -194,7 +307,7 @@ final class Command
 
 
 	/**
-	 * @return list<Flag|Option|Argument|Section|Text>  in the order the help shows them
+	 * @return list<Flag|Option|Argument|self|Section|Text>  in the order the help shows them
 	 * @internal
 	 */
 	public function getItems(): array
@@ -204,17 +317,39 @@ final class Command
 
 
 	/**
-	 * Refuses names, aliases or negations taken by an option of this command.
+	 * Refuses names, aliases or negations taken by an option of this command, of a command above it or of a command
+	 * below it. Commands beside it may reuse them.
 	 * @param  list<?string>  $names
 	 */
 	private function assertNamesAvailable(array $names): void
 	{
-		foreach ($this->getOptions() as $other) {
-			foreach ($names as $name) {
-				if ($name !== null && $other->hasName($name)) {
-					throw new \InvalidArgumentException("Option '$name' is already defined.");
+		foreach ([...$this->getPath(), ...$this->collectDescendants()] as $command) {
+			foreach ($command->getOptions() as $other) {
+				foreach ($names as $name) {
+					if ($name !== null && $other->hasName($name)) {
+						throw new \InvalidArgumentException("Option '$name' is already defined.");
+					}
 				}
 			}
 		}
+	}
+
+
+	/** @return list<self> */
+	private function collectDescendants(): array
+	{
+		$descendants = [];
+		foreach ($this->getCommands() as $command) {
+			$descendants = [...$descendants, $command, ...$command->collectDescendants()];
+		}
+
+		return $descendants;
+	}
+
+
+	/** @internal */
+	public function getLabel(): string
+	{
+		return $this->parent ? "Command '{$this->getFullName()}'" : 'The program';
 	}
 }
