@@ -7,362 +7,258 @@
 
 namespace Nette\CommandLine;
 
-use function count;
+use Nette\CommandLine\Parameters\Argument;
+use Nette\CommandLine\Parameters\Flag;
+use Nette\CommandLine\Parameters\Option;
+use Nette\CommandLine\Parameters\Parameter;
+use Nette\CommandLine\Parameters\ValueParameter;
+use function array_key_exists, count, is_array;
 
 
 /**
- * Stupid command line arguments parser.
+ * Reads a command line according to the definition of a command.
  */
-class Parser
+final class Parser
 {
-	public const
-		Argument = 'argument',
-		Optional = 'optional',
-		Repeatable = 'repeatable',
-		Enum = 'enum',
-		RealPath = 'realpath',
-		Normalizer = 'normalizer',
-		Default = 'default';
-
-	#[\Deprecated('use Parser::Argument')]
-	public const ARGUMENT = self::Argument;
-
-	#[\Deprecated('use Parser::Optional')]
-	public const OPTIONAL = self::Optional;
-
-	#[\Deprecated('use Parser::Repeatable')]
-	public const REPEATABLE = self::Repeatable;
-
-	#[\Deprecated('use Parser::Enum')]
-	public const ENUM = self::Enum;
-
-	#[\Deprecated('use Parser::RealPath')]
-	public const REALPATH = self::RealPath;
-
-	#[\Deprecated('use Parser::Default')]
-	public const VALUE = self::Default;
 	private const OptionPresent = true;
 
-	/** @var array<string, Option> */
-	private array $options = [];
-	private string $help = '';
 
-	/** @var list<string> */
-	private array $args;
-
-
-	/** @param array<string, array<string, mixed>> $defaults */
-	public function __construct(string $help = '', array $defaults = [])
+	/**
+	 * Parses the command line, which is the one of the running process unless given. The line is always read from
+	 * the root; given a subcommand, it has to run that command or one below it.
+	 * @param  ?list<string>  $args  the tokens without the name of the program
+	 */
+	public function parse(Command $command, ?array $args = null): Result
 	{
-		$this->args = array_values(array_map(strval(...), isset($_SERVER['argv']) ? array_slice($_SERVER['argv'], 1) : []));
+		$args ??= array_values(array_map(strval(...), array_slice((array) ($_SERVER['argv'] ?? []), 1)));
 
-		if ($help || $defaults) {
-			$this->addFromHelp($help, $defaults);
+		[$selected, $occurrences] = $this->collect($command->getRoot(), $args);
+		if (!in_array($command, $selected->getPath(), true)) {
+			throw new ParseException("The command line does not run command '{$command->getFullName()}'.", $selected, reason: ParseError::CommandMismatch);
 		}
+
+		$parameters = self::listParameters($selected);
+		$values = $this->complete($parameters, $this->evaluate($parameters, $occurrences, $selected));
+
+		return new Result($selected, $values, array_keys($occurrences), $args === []);
 	}
 
 
 	/**
-	 * Extracts option definitions from formatted help text.
-	 * @param array<string, array<string, mixed>> $defaults
+	 * @return array<string, Parameter>  the parameters of the command and of all commands above it
 	 */
-	public function addFromHelp(string $help, array $defaults = []): static
+	private static function listParameters(Command $command): array
 	{
-		preg_match_all('#^[ \t]+(--?\w.*?)(?:  .*\(default: (.*)\)|  |\r|$)#m', $help, $lines, PREG_SET_ORDER);
-		foreach ($lines as $line) {
-			preg_match_all('#(--?\w[\w-]*)(?:[= ](<.*?>|\[.*?]|\w+)(\.{0,3}))?[ ,|]*#A', $line[1], $m);
-			if (!count($m[0]) || count($m[0]) > 2 || implode('', $m[0]) !== $line[1]) {
-				throw new \InvalidArgumentException("Unable to parse '$line[1]'.");
+		$parameters = [];
+		foreach ($command->getPath() as $level) {
+			foreach ($level->getParameters() as $parameter) {
+				$parameters[$parameter->name] = $parameter;
 			}
-
-			$name = (string) end($m[1]);
-			$defaults[$name] = ($defaults[$name] ?? []) + [
-				self::Argument => (bool) end($m[2]),
-				self::Optional => isset($line[2]) || (str_starts_with((string) end($m[2]), '[')),
-				self::Repeatable => (bool) end($m[3]),
-				self::Enum => count($enums = explode('|', trim((string) end($m[2]), '<[]>'))) > 1 ? $enums : null,
-				self::Default => $line[2] ?? null,
-			];
-			$aliases[$name] = $name !== $m[1][0] ? $m[1][0] : null;
 		}
 
-		foreach ($defaults as $name => $opt) {
-			$default = $opt[self::Default] ?? null;
-			if ($opt[self::RealPath] ?? false) {
-				$opt[self::Normalizer] = ($opt[self::Normalizer] ?? null)
-					? fn($value) => self::normalizeRealPath($opt[self::Normalizer]($value))
-					: self::normalizeRealPath(...);
+		return $parameters;
+	}
+
+
+	/**
+	 * Phase 1: reads the tokens into raw occurrences per parameter and follows the command names down the tree,
+	 * resolving aliases. An option used without a value yields the OptionPresent sentinel.
+	 * @param  list<string>  $args
+	 * @return array{Command, array<string, list<mixed>>}  the command the line runs and the occurrences
+	 */
+	private function collect(Command $root, array $args): array
+	{
+		$command = $root;
+		$names = self::indexOptions($command);
+		$arguments = $command->getArguments();
+		$occurrences = $extra = [];
+		$onlyPositional = false;
+
+		$i = 0;
+		while ($i < count($args)) {
+			$arg = $args[$i++];
+			if (!$onlyPositional && $arg === '--') { // everything after -- is positional
+				$onlyPositional = true;
+				continue;
+
+			} elseif (
+				!$onlyPositional
+				&& !self::isOption($arg)
+				&& ($commands = $command->getCommands())
+			) {
+				$subcommand = array_values(array_filter($commands, fn(Command $candidate) => $candidate->name === $arg))[0] ?? null;
+				if (!$subcommand) {
+					throw new ParseException("Unknown command '" . self::escape($arg) . "'.", $command, reason: ParseError::UnknownCommand);
+				}
+
+				$command = $subcommand;
+				$names = self::indexOptions($command);
+				$arguments = $command->getArguments();
+				continue;
+
+			} elseif ($onlyPositional || !self::isOption($arg)) {
+				$argument = current($arguments);
+				if (!$argument) {
+					$extra[] = $arg;
+				} else {
+					$occurrences[$argument->name][] = $arg;
+					if (!$argument->repeatable) { // a repeatable argument consumes all remaining values
+						next($arguments);
+					}
+				}
+
+				continue;
 			}
-			$this->options[$name] = new Option(
-				name: $name,
-				alias: $aliases[$name] ?? null,
-				type: match (true) {
-					!($opt[self::Argument] ?? true) => ValueType::None,
-					($opt[self::Optional] ?? false) || $default !== null => ValueType::Optional,
-					default => ValueType::Required,
-				},
-				repeatable: (bool) ($opt[self::Repeatable] ?? null),
-				fallback: $default,
-				normalizer: $opt[self::Normalizer] ?? null,
-				enum: $opt[self::Enum] ?? null,
+
+			[$name, $value] = self::splitNameValue($arg);
+			$option = $names[$name] ?? null;
+			if (!$option) {
+				throw new ParseException('Unknown option ' . self::escape($name) . '.', $command, reason: ParseError::UnknownOption);
+			}
+
+			if ($value !== self::OptionPresent && $option instanceof Flag) {
+				throw new ParseException("Option $option->name does not accept a value.", $command, reason: ParseError::UnexpectedValue, parameter: $option);
+
+			} elseif ($value === self::OptionPresent && $option instanceof Option && !$option->valueOptional) { // an optional value is only ever attached with =
+				if (isset($args[$i]) && !self::isOption($args[$i])) {
+					$value = $args[$i++];
+				} else {
+					throw new ParseException("Option $option->name requires a value.", $command, reason: ParseError::MissingValue, parameter: $option);
+				}
+			}
+
+			$occurrences[$option->name][] = $value;
+		}
+
+		if ($extra) {
+			$list = implode(', ', array_map(self::escape(...), $extra));
+			throw new ParseException(
+				count($extra) === 1 ? "Unexpected argument $list." : "Unexpected arguments $list.",
+				$command,
+				reason: ParseError::UnexpectedArgument,
 			);
 		}
 
-		$this->help .= $help;
-		return $this;
+		return [$command, $occurrences];
 	}
 
 
 	/**
-	 * Adds a switch (flag without value), e.g. --foo or -f.
-	 * Parses as true when used, null when not.
-	 */
-	public function addSwitch(
-		string $name,
-		?string $alias = null,
-		bool $repeatable = false,
-	): static
-	{
-		$this->options[$name] = new Option(
-			name: $name,
-			alias: $alias,
-			type: ValueType::None,
-			repeatable: $repeatable,
-		);
-		return $this;
-	}
-
-
-	/**
-	 * Adds an option with value, e.g. --foo json or -f json.
-	 * @param bool  $optionalValue  If true, value can be omitted (--foo parses as true)
-	 * @param mixed  $fallback      Parsed value when option is not used at all
-	 * @param ?list<string>  $enum
-	 * @param ?(\Closure(mixed): mixed)  $normalizer
-	 */
-	public function addOption(
-		string $name,
-		?string $alias = null,
-		bool $optionalValue = false,
-		mixed $fallback = null,
-		?array $enum = null,
-		bool $repeatable = false,
-		?\Closure $normalizer = null,
-	): static
-	{
-		$this->options[$name] = new Option(
-			name: $name,
-			alias: $alias,
-			type: $optionalValue ? ValueType::Optional : ValueType::Required,
-			fallback: $fallback,
-			repeatable: $repeatable,
-			enum: $enum,
-			normalizer: $normalizer,
-		);
-		return $this;
-	}
-
-
-	/**
-	 * Adds a positional argument, e.g. <foo> or [foo].
-	 * @param bool  $optional   If true, argument can be omitted
-	 * @param mixed  $fallback  Parsed value when argument is not provided
-	 * @param ?list<string>  $enum
-	 * @param ?(\Closure(mixed): mixed)  $normalizer
-	 */
-	public function addArgument(
-		string $name,
-		bool $optional = false,
-		mixed $fallback = null,
-		?array $enum = null,
-		bool $repeatable = false,
-		?\Closure $normalizer = null,
-	): static
-	{
-		$this->options[$name] = new Option(
-			name: $name,
-			type: $optional ? ValueType::Optional : ValueType::Required,
-			fallback: $fallback,
-			repeatable: $repeatable,
-			enum: $enum,
-			normalizer: $normalizer,
-		);
-		return $this;
-	}
-
-
-	/**
-	 * Parses command-line arguments and returns associative array of values.
-	 * @param ?list<string>  $args  Arguments to parse (defaults to $_SERVER['argv'])
+	 * Phase 2: checks and converts the values that were actually supplied. Only the last value of a parameter that
+	 * is not repeatable counts, so the earlier ones are neither checked nor converted.
+	 * @param  array<string, Parameter>  $parameters
+	 * @param  array<string, list<mixed>>  $occurrences
 	 * @return array<string, mixed>
 	 */
-	public function parse(?array $args = null): array
+	private function evaluate(array $parameters, array $occurrences, Command $command): array
 	{
-		$args ??= $this->args;
-
-		$aliases = $positional = [];
-		foreach ($this->options as $opt) {
-			if ($opt->positional) {
-				$positional[] = $opt;
-			} elseif ($opt->alias !== null) {
-				$aliases[$opt->alias] = $opt;
+		$values = [];
+		foreach ($occurrences as $name => $supplied) {
+			$parameter = $parameters[$name];
+			$supplied = $parameter->repeatable ? $supplied : [end($supplied)];
+			if ($parameter instanceof ValueParameter) {
+				$supplied = array_map(fn($value) => $this->normalizeValue($parameter, $value, $command), $supplied);
 			}
+
+			$values[$name] = $parameter->repeatable ? $supplied : $supplied[0];
 		}
 
-		$params = [];
-		reset($positional);
-		$i = 0;
-		while ($i < count($args)) {
-			$arg = $args[$i++];
-			if ($arg[0] !== '-') {
-				if (!current($positional)) {
-					throw new \Exception("Unexpected parameter $arg.");
-				}
-
-				$opt = current($positional);
-				$arg = $this->normalizeValue($opt, $arg);
-				if (!$opt->repeatable) {
-					$params[$opt->name] = $arg;
-					next($positional);
-				} else {
-					$params[$opt->name][] = $arg;
-				}
-
-				continue;
-			}
-
-			[$name, $arg] = strpos($arg, '=') ? explode('=', $arg, 2) : [$arg, self::OptionPresent];
-			$opt = $aliases[$name] ?? $this->options[$name] ?? null;
-			if (!$opt) {
-				throw new \Exception("Unknown option $name.");
-			}
-
-			if ($arg !== self::OptionPresent && $opt->type === ValueType::None) {
-				throw new \Exception("Option $opt->name has not argument.");
-
-			} elseif ($arg === self::OptionPresent && $opt->type !== ValueType::None) {
-				if (isset($args[$i]) && $args[$i][0] !== '-') {
-					$arg = $args[$i++];
-				} elseif ($opt->type === ValueType::Required) {
-					throw new \Exception("Option $opt->name requires argument.");
-				}
-			}
-
-			$arg = $this->normalizeValue($opt, $arg);
-
-			if (!$opt->repeatable) {
-				$params[$opt->name] = $arg;
-			} else {
-				$params[$opt->name][] = $arg;
-			}
-		}
-
-		foreach ($this->options as $opt) {
-			if (isset($params[$opt->name])) {
-				continue;
-			} elseif ($opt->type !== ValueType::Required) {
-				$params[$opt->name] = $opt->fallback;
-			} elseif ($opt->positional) {
-				throw new \Exception("Missing required argument <$opt->name>.");
-			} else {
-				$params[$opt->name] = null;
-			}
-
-			if ($opt->repeatable) {
-				$params[$opt->name] = (array) $params[$opt->name];
-			}
-		}
-
-		return $params;
+		return $values;
 	}
 
 
 	/**
-	 * Parses only specified options, ignoring everything else.
-	 * No validation, no exceptions. Useful for early-exit options like --help.
-	 * @param  list<string>  $names  Option names to parse (e.g., ['--help', '--version'])
-	 * @param  ?list<string>  $args
-	 * @return array<string, mixed>  Parsed values (null if option not used)
+	 * Phase 3: fills in what did not occur. Presence is decided by the occurrences, not by the
+	 * value, so a normalizer may return null without the default value overwriting it.
+	 * @param  array<string, Parameter>  $parameters
+	 * @param  array<string, mixed>  $values
+	 * @return array<string, mixed>
 	 */
-	public function parseOnly(array $names, ?array $args = null): array
+	private function complete(array $parameters, array $values): array
 	{
-		$args ??= $this->args;
-		$lookup = [];
-		foreach ($names as $name) {
-			$opt = $this->options[$name] ?? null;
-			if ($opt) {
-				$lookup[$name] = $opt;
-				if ($opt->alias !== null) {
-					$lookup[$opt->alias] = $opt;
+		foreach ($parameters as $name => $parameter) {
+			if (array_key_exists($name, $values)) {
+				continue;
+			} elseif ($parameter instanceof Argument && !$parameter->optional) {
+				throw new ParseException("Missing required argument <$name>.", $parameter->command, reason: ParseError::MissingArgument, parameter: $parameter);
+			}
+
+			$default = $parameter->default;
+			$values[$name] = $parameter->repeatable && !is_array($default)
+				? ($default === null ? [] : [$default])
+				: $default;
+		}
+
+		return $values;
+	}
+
+
+	/**
+	 * Indexes the options valid at the command by name and by alias.
+	 * @return array<string, Flag|Option>
+	 */
+	private static function indexOptions(Command $command): array
+	{
+		$names = [];
+		foreach ($command->getPath() as $level) {
+			foreach ($level->getOptions() as $option) {
+				$names[$option->name] = $option;
+				if ($option->alias !== null) {
+					$names[$option->alias] = $option;
 				}
 			}
 		}
 
-		$params = array_fill_keys($names, null);
-		$i = 0;
-		while ($i < count($args)) {
-			$arg = $args[$i++];
-			if ($arg[0] !== '-') {
-				continue;
-			}
+		return $names;
+	}
 
-			[$name, $value] = strpos($arg, '=') ? explode('=', $arg, 2) : [$arg, self::OptionPresent];
-			$opt = $lookup[$name] ?? null;
-			if (!$opt) {
-				continue;
-			}
 
-			if ($value === self::OptionPresent && $opt->type !== ValueType::None) {
-				if (isset($args[$i]) && $args[$i][0] !== '-') {
-					$value = $args[$i++];
-				}
-			}
-
-			$params[$opt->name] = $value;
+	private function normalizeValue(ValueParameter $parameter, mixed $value, Command $command): mixed
+	{
+		if ($value === self::OptionPresent) {
+			// option used without a value (optional value) - keep the `true` sentinel untouched
+			return true;
 		}
 
-		return $params;
+		// a bad value is reported by throwing; an \Error means the normalizer itself is broken
+		try {
+			return $parameter->normalize($value);
+		} catch (ParseException $e) {
+			throw $e;
+		} catch (\Exception $e) { // dresscode:ignore reference-throwable-only
+			$label = $parameter instanceof Option ? "Option $parameter->name" : "Argument <$parameter->name>";
+			throw new ParseException("$label: " . self::escape($e->getMessage()), $command, $e, ParseError::InvalidValue, $parameter);
+		}
 	}
 
 
 	/**
-	 * Prints help text to stdout.
+	 * Returns true if the token looks like an option, not a positional value. A lone "-" is a value by convention
+	 * (usually meaning stdin/stdout).
 	 */
-	public function help(): void
+	private static function isOption(string $arg): bool
 	{
-		echo $this->help;
-	}
-
-
-	private function normalizeValue(Option $opt, mixed $value): mixed
-	{
-		if ($opt->enum && $value !== self::OptionPresent && !in_array($value, $opt->enum, true)) {
-			throw new \Exception("Value of option $opt->name must be " . implode(', or ', $opt->enum) . '.');
-		}
-
-		return $opt->normalizer ? ($opt->normalizer)($value) : $value;
+		return $arg !== '' && $arg !== '-' && $arg[0] === '-';
 	}
 
 
 	/**
-	 * Resolves a path to its absolute form. Throws if the path does not exist.
+	 * Splits a "--name=value" token into [name, value]; a bare "--name" yields the OptionPresent sentinel as value.
+	 * @return array{string, string|true}
 	 */
-	public static function normalizeRealPath(string $value): string
+	private static function splitNameValue(string $arg): array
 	{
-		$path = realpath($value);
-		if ($path === false) {
-			throw new \Exception("File path '$value' not found.");
-		}
-
-		return $path;
+		return ($eq = strpos($arg, '=')) !== false
+			? [substr($arg, 0, $eq), substr($arg, $eq + 1)]
+			: [$arg, self::OptionPresent];
 	}
 
 
 	/**
-	 * Returns true if no command-line arguments were provided.
+	 * Makes a text from the command line safe to show in a message, with control characters as escape sequences.
 	 */
-	public function isEmpty(): bool
+	private static function escape(string $s): string
 	{
-		return !$this->args;
+		return addcslashes($s, "\0..\37\177");
 	}
 }

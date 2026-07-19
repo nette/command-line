@@ -1,4 +1,5 @@
 /vendor
 tests/output
+tests/temp
 tests/coverage.dat
 composer.lock

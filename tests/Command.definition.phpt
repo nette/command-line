@@ -207,7 +207,7 @@ test('the rules that involve several arguments are judged when an argument is ad
 		"Required argument 'b' cannot follow optional argument 'a'.",
 	);
 	$command->addArgument('b', optional: true);
-	Assert::count(2, $command->getArguments());
+	Assert::same(['a' => null, 'b' => null], parseArgs($command, []));
 
 	$command = new Command;
 	$command->addArgument('files', optional: true, repeatable: true);

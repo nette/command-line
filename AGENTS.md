@@ -9,15 +9,18 @@ internally and the rationale behind key design decisions - lives in `docs/`.
 Consult it before non-trivial changes; it is the source of truth from which the
 public manual is distilled.
 
-Two small classes, mostly clear from signatures; the value is a few traps - the
-help-text-as-schema parser, the `parse()` sentinel, and the two terminal checks.
-Read `docs/internals.md` before editing them.
+Small classes, mostly clear from signatures; the value is a handful of traps - the
+three phases of `parse()` with the command selection and the sentinel, `isset()` on
+`Result`, and the two terminal checks. Read
+`docs/internals.md` before editing them.
 
 ## Project Overview
 
-**Nette Command Line** is a tiny, zero-dependency library with two utilities:
-`Parser` (argument/option parsing, including help-text-driven definitions) and
-`Console` (terminal color output with capability detection).
+**Nette Command Line** is a tiny, zero-dependency library. `Command` defines a
+command line as a tree of the program and its commands, `Parser` reads a command
+line against it and returns a `Result` and `Console` colors the output. The
+parameters live in the `Parameters` namespace: `Flag` extends `Parameter`, while
+`Option` and `Argument` extend it through `ValueParameter`.
 
 - **PHP Version**: 8.2 - 8.5
 - **Package**: `nette/command-line`
@@ -27,7 +30,7 @@ Read `docs/internals.md` before editing them.
 ```bash
 # Run all tests
 vendor/bin/tester tests -s        # or: composer tester
-vendor/bin/tester tests/Parser.fluent.phpt -s
+vendor/bin/tester tests/Parser.parse.phpt -s
 
 # Static analysis (PHPStan level 8)
 composer phpstan
@@ -37,29 +40,34 @@ composer phpstan
 
 - Every file starts with `declare(strict_types=1);`; **tabs**; everything typed;
   Nette Coding Standard.
-- Constants are modern PascalCase (`Parser::Optional`) with deprecated UPPERCASE
-  aliases kept for BC.
+- Constants and enum cases are modern PascalCase (`ParseError::UnknownOption`).
 - Tests are Nette Tester `.phpt` under `tests/` (require `bootstrap.php`); use
   `test()` / `Assert::same` / `Assert::exception`, no comment before `test()`.
 
 ## Working in this repo
 
-- **Help text *is* the schema.** `addFromHelp()` parses formatted help with two
-  regexes: the option name is the **last** flag on a line, the alias the first; a
-  `<file>`/`[type]` spec sets required/optional, `...` marks repeatable, `<a|b|c>` an
-  enum. The `$defaults` array merges over the parsed result (it supplies `RealPath`,
-  `Normalizer`, etc.); `RealPath` desugars into a `Normalizer`.
-- **`parse()` uses an `OptionPresent = true` sentinel.** A bare `--flag` yields the
-  literal `true`; a value is taken from the next token only if it doesn't start with
-  `-`. So an optional-value option used bare parses as **`true`, not its fallback** -
-  the **fallback applies only when the option is absent entirely**. A missing required
-  *positional argument* throws; a missing required *option* becomes `null`.
-- **`parseOnly()` is deliberately dumb** - it parses only the named options, never
-  validates, never throws (so `--help`/`--version` work despite a missing required
-  argument). Don't add validation to it.
+- **Definition, parsing and output are three classes.** `Command` never
+  touches `argv`, the environment or a stream; `Parser` takes the command as an
+  argument and keeps no state; `Console` knows no `Command`. Each node keeps one
+  ordered list of items.
+- **Every setting is a named argument of `add*()` and cannot change afterwards**, so
+  everything is refused at once, the rules over several arguments included, and the
+  parser checks no definition. A setting that makes no sense for a kind of parameter
+  is not an argument of its `add*()` method.
+- **`parse()` has three phases**: collect the raw occurrences while following the
+  command names down the tree, convert what was supplied, fill in what was not.
+  The line is always read from the root and the valid options are those of the
+  selected node and its ancestors. Presence is recorded separately from value, so
+  a normalizer may return `null`; an optional value and the default value are
+  independent.
+- **A bare `--flag` yields the literal `true` sentinel**, which neither the enum
+  check nor the normalizer sees. An optional-value option used bare is therefore
+  `true`, not its default; the default applies only when the option is absent.
+- **`isset()` on `Result` is false for a known name with `null`**, like on an
+  array; reading an unknown name throws. Consumers rely on both.
 - **`Console::detectColors()` and `detectTerminal()` are separate on purpose.** Gate
   *color* on `detectColors` (honors `NO_COLOR`/`FORCE_COLOR`), but gate
   *interactive-only* features (progress bars, prompts) on `detectTerminal` (pure TTY)
   - a user may disable color yet still be on a real terminal.
-- User-facing how-to (fluent `addSwitch`/`addOption`/`addArgument`, the help-text
+- User-facing how-to (`addFlag`/`addOption`/`addArgument` and their settings, the help-text
   format, color codes) is manual material and lives in the public web docs, not here.
