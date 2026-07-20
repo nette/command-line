@@ -36,9 +36,9 @@ final class NameSyntax
 
 
 	/**
-	 * Refuses a name of an argument other than a letter, digit or underscore followed by no whitespace or control
-	 * character.
-	 * @param  'Argument'  $kind
+	 * Refuses a name of an argument or a command other than a letter, digit or underscore followed by no whitespace
+	 * or control character.
+	 * @param  'Argument'|'Command'  $kind
 	 */
 	public static function assertWordName(string $name, string $kind): void
 	{
