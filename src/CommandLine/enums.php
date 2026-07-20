@@ -14,9 +14,12 @@ namespace Nette\CommandLine;
 enum ParseFailure
 {
 	case UnknownOption;
+	case UnknownCommand;
+	case MissingCommand;
 	case MissingValue;
 	case UnexpectedValue;
 	case MissingArgument;
 	case UnexpectedArgument;
 	case InvalidValue;
+	case CommandMismatch;
 }

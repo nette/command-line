@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use Nette\CommandLine\{Command, ParseException, ParseFailure};
+use Nette\CommandLine\{Command, ParseException, ParseFailure, Parser};
 use Tester\Assert;
 
 require __DIR__ . '/bootstrap.php';
@@ -46,4 +46,35 @@ test('an exception from a normalizer is an invalid value of its parameter', func
 	$own = new Command; // a normalizer throwing a ParseException of its own passes it through, with no token
 	$own->addOption('--x', normalizer: fn() => throw new ParseException('custom', $own));
 	Assert::null(Assert::exception(fn() => parseArgs($own, ['--x=1']), ParseException::class, 'custom')->token);
+});
+
+
+test('commands', function () {
+	$cli = new Command('tool');
+	$check = $cli->addCommand('check');
+	$cli->addCommand('fix');
+
+	$e = Assert::exception(fn() => (new Parser)->parse($cli, ['zzz']), ParseException::class);
+	Assert::same(ParseFailure::UnknownCommand, $e->reason);
+	Assert::null($e->parameter);
+	Assert::same('zzz', $e->token);
+
+	$e = Assert::exception(fn() => (new Parser)->parse($cli, ['-5']), ParseException::class);
+	Assert::same(ParseFailure::UnknownOption, $e->reason);
+	Assert::same('-5', $e->token);
+
+	$e = Assert::exception(fn() => (new Parser)->parse($check, ['fix']), ParseException::class);
+	Assert::same(ParseFailure::CommandMismatch, $e->reason);
+	Assert::null($e->token);
+
+	$required = new Command('tool', commandRequired: true);
+	$required->addCommand('check');
+	$e = Assert::exception(fn() => (new Parser)->parse($required, []), ParseException::class, 'Missing command.');
+	Assert::same(ParseFailure::MissingCommand, $e->reason);
+	Assert::null($e->token);
+
+	$cli->addOption('--mode', enum: ['a']); // inherited, and judged at the selected command
+	$e = Assert::exception(fn() => (new Parser)->parse($cli, ['check', '--mode=zz']), ParseException::class);
+	Assert::same($check, $e->command);
+	Assert::same('zz', $e->token);
 });
