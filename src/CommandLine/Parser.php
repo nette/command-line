@@ -12,7 +12,7 @@ use Nette\CommandLine\Parameters\Flag;
 use Nette\CommandLine\Parameters\Option;
 use Nette\CommandLine\Parameters\Parameter;
 use Nette\CommandLine\Parameters\ValueParameter;
-use function array_key_exists, count, is_array;
+use function array_key_exists, count, is_array, strlen;
 
 
 /**
@@ -88,7 +88,8 @@ final class Parser
 			) {
 				$subcommand = array_values(array_filter($commands, fn(Command $candidate) => $candidate->name === $arg))[0] ?? null;
 				if (!$subcommand) {
-					throw new ParseException("Unknown command '" . self::escape($arg) . "'.", $command, reason: ParseError::UnknownCommand);
+					$hint = self::suggest($arg, array_map(fn(Command $candidate) => (string) $candidate->name, $commands));
+					throw new ParseException("Unknown command '" . self::escape($arg) . "'." . ($hint === null ? '' : " Did you mean '$hint'?"), $command, reason: ParseError::UnknownCommand);
 				}
 
 				$command = $subcommand;
@@ -118,7 +119,11 @@ final class Parser
 					continue;
 				}
 
-				throw new ParseException('Unknown option ' . self::escape($name) . '.', $command, reason: ParseError::UnknownOption);
+				throw new ParseException(
+					self::describeUnknownOption($name, $command, array_keys($names)),
+					$command,
+					reason: ParseError::UnknownOption,
+				);
 			}
 
 			if ($value !== self::OptionPresent && $option instanceof Flag) {
@@ -215,6 +220,62 @@ final class Parser
 		}
 
 		return $names;
+	}
+
+
+	/**
+	 * @param  list<string>  $known  names and aliases valid at the command
+	 */
+	private static function describeUnknownOption(string $name, Command $command, array $known): string
+	{
+		$owner = self::findOwner($command->getRoot(), $name);
+		if ($owner !== null) {
+			return "Option $name belongs to command '{$owner->getFullName()}'.";
+		}
+
+		$hint = self::suggest($name, $known);
+		return 'Unknown option ' . self::escape($name) . '.' . ($hint === null ? '' : " Did you mean $hint?");
+	}
+
+
+	/**
+	 * Finds the command in the tree that defines an option by this name or alias.
+	 */
+	private static function findOwner(Command $command, string $name): ?Command
+	{
+		foreach ($command->getOptions() as $option) {
+			if ($option->hasName($name)) {
+				return $command;
+			}
+		}
+
+		foreach ($command->getCommands() as $subcommand) {
+			if ($owner = self::findOwner($subcommand, $name)) {
+				return $owner;
+			}
+		}
+
+		return null;
+	}
+
+
+	/**
+	 * Finds the candidate closest to an unknown name, or null when nothing is similar enough.
+	 * @param  list<string>  $candidates
+	 */
+	private static function suggest(string $unknown, array $candidates): ?string
+	{
+		$best = null;
+		$bestDist = PHP_INT_MAX;
+		foreach ($candidates as $candidate) {
+			if (($dist = levenshtein($unknown, $candidate)) < $bestDist) {
+				$bestDist = $dist;
+				$best = $candidate;
+			}
+		}
+
+		// require a close match that is not just "any other short flag"
+		return $bestDist <= 2 && strlen($unknown) - $bestDist >= 2 ? $best : null;
 	}
 
 

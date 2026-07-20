@@ -233,7 +233,7 @@ exit(match ($result->command) {
 
 Without a `default` arm, `match` throws `UnhandledMatchError` when you forget a command.
 
-A command accepts its own options and those of all the commands above it, so `--config` works both in `dresscode -c x.neon check` and in `dresscode check -c x.neon`. The result holds only the parameters on the way to the selected command.
+A command accepts its own options and those of all the commands above it, so `--config` works both in `dresscode -c x.neon check` and in `dresscode check -c x.neon`. The result holds only the parameters on the way to the selected command. An option of a different command is refused with a message saying where it belongs: `Option --generate-baseline belongs to command 'check'.`
 
 Commands can be nested as deep as you need, `git remote add` is just a command of a command. A command that has subcommands cannot take arguments, and two commands side by side may use the same option names.
 
@@ -268,11 +268,12 @@ Common error messages:
 |-------|-------|
 | `Option --output requires a value.` | Option used without its required value |
 | `Option --verbose does not accept a value.` | A value given to a flag |
-| `Unknown option --verbos.` | Unrecognized option |
+| `Unknown option --verbos. Did you mean --verbose?` | Unrecognized option |
 | `Missing required argument <file>.` | Required argument not provided |
 | `Unexpected arguments b, c.` | Extra positional arguments |
 | `Option --format: expects json or xml, 'yaml' given.` | Value not in the enum |
-| `Unknown command 'chekc'.` | Unrecognized command |
+| `Unknown command 'chekc'. Did you mean 'check'?` | Unrecognized command |
+| `Option --generate-baseline belongs to command 'check'.` | Option of another command |
 
 Errors in the definition itself, such as an option name without a dash, a name used twice or a required argument after an optional one, are programming errors and throw `\InvalidArgumentException` or `\LogicException`.
 

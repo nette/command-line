@@ -71,8 +71,9 @@ Consequences worth knowing:
 - **The line is always read from the root.** Given a subcommand, `parse()` only checks
   afterwards that the line ran it or a command below it.
 - **Valid options are those of the selected node and all its ancestors**, looked up at
-  parse time, so a root option added after `addCommand()` is inherited all the same. The
-  result holds only the parameters on the path to the selected node.
+  parse time, so a root option added after `addCommand()` is inherited all the same. An
+  option of another branch is reported as belonging to its command. The result holds only
+  the parameters on the path to the selected node.
 - **After `--` a command name is a plain value**, no command is selected any more.
 - **Nothing asks `isset()` about a value while parsing**, so a normalizer may legitimately
   return `null` without the default overwriting it.

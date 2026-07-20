@@ -47,8 +47,27 @@ test('options of the commands above are valid on both sides of the command name'
 });
 
 
-test('an unknown command is refused', function () {
+test('an unknown command suggests a close one', function () {
+	Assert::exception(
+		fn() => (new Parser)->parse(app(), ['chekc']),
+		ParseException::class,
+		"Unknown command 'chekc'. Did you mean 'check'?",
+	);
 	Assert::exception(fn() => (new Parser)->parse(app(), ['zzz']), ParseException::class, "Unknown command 'zzz'.");
+});
+
+
+test('an option of another command says where it belongs', function () {
+	Assert::exception(
+		fn() => (new Parser)->parse(app(), ['explain', 'x', '--generate-baseline']),
+		ParseException::class,
+		"Option --generate-baseline belongs to command 'check'.",
+	);
+	Assert::exception(
+		fn() => (new Parser)->parse(app(), ['--generate-baseline', 'check']),
+		ParseException::class,
+		"Option --generate-baseline belongs to command 'check'.",
+	);
 });
 
 
