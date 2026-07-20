@@ -62,7 +62,7 @@ final class Parser
 
 	/**
 	 * Phase 1: reads the tokens into raw occurrences per parameter and follows the command names down the tree,
-	 * resolving aliases. An option used without a value yields the OptionPresent sentinel.
+	 * resolving aliases and bundles. An option used without a value yields the OptionPresent sentinel.
 	 * @param  list<string>  $args
 	 * @return array{Command, array<string, list<mixed>>}  the command the line runs and the occurrences
 	 */
@@ -113,6 +113,11 @@ final class Parser
 			[$name, $value] = self::splitNameValue($arg);
 			$option = $names[$name] ?? null;
 			if (!$option) {
+				if ($value === self::OptionPresent && ($bundle = self::expandBundle($name, $names)) !== null) {
+					array_splice($args, $i, 0, $bundle); // replace -abc with -a -b -c and reprocess
+					continue;
+				}
+
 				throw new ParseException('Unknown option ' . self::escape($name) . '.', $command, reason: ParseError::UnknownOption);
 			}
 
@@ -210,6 +215,35 @@ final class Parser
 		}
 
 		return $names;
+	}
+
+
+	/**
+	 * Expands a bundle of short flags like -abc into ['-a', '-b', '-c'], or returns null when it is not a clean
+	 * bundle. Every character must be a defined single-letter flag; only the last one may take a value.
+	 * @param  array<string, Flag|Option>  $names
+	 * @return ?list<string>
+	 */
+	private static function expandBundle(string $token, array $names): ?array
+	{
+		if (!preg_match('#^-\w{2,}$#D', $token)) {
+			return null;
+		}
+
+		$chars = str_split(substr($token, 1));
+		$bundle = [];
+		foreach ($chars as $j => $char) {
+			$short = "-$char";
+			$option = $names[$short] ?? null;
+			$isLast = $j === count($chars) - 1;
+			if ($option === null || (!$isLast && !$option instanceof Flag)) {
+				return null;
+			}
+
+			$bundle[] = $short;
+		}
+
+		return $bundle;
 	}
 
 

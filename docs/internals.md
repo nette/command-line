@@ -58,8 +58,8 @@ The split exists because presence has to be recorded separately from value:
 
 1. **`collect()`** reads the tokens into raw occurrences per name and **follows the command
    names down the tree**: on a node with subcommands, the first positional token picks one.
-   It resolves aliases. An option used without a value yields the `OptionPresent = true`
-   sentinel.
+   It resolves aliases and bundles. An option used without a value yields the
+   `OptionPresent = true` sentinel.
 2. **`evaluate()`** converts what was actually supplied through `ValueParameter::normalize()`:
    the enum check on the raw string, then the normalizer. The parameter knows what a valid
    value is; the parser only keeps the sentinel away from it and turns its exception into a

@@ -120,6 +120,8 @@ Arguments can appear anywhere on the command line, before or after the options. 
 // script.php -           → input = '-'
 ```
 
+Several single-letter flags can be written as one token: `-va` means `-v -a`, and the last letter may take a value, so `-vao out.txt` means `-v -a -o out.txt`.
+
 A flag takes no value, so `addFlag()` has none of the settings of a value. `enum` and `normalizer` exist on `addOption()` and `addArgument()`, `valueOptional` on `addOption()` only.
 
 
