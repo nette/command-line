@@ -105,6 +105,27 @@ test('an empty string is a value', function () {
 });
 
 
+test('bundled short flags', function () {
+	$command = new Command;
+	$command->addFlag('--verbose', alias: '-v');
+	$command->addFlag('--all', alias: '-a');
+	$command->addOption('--output', alias: '-o');
+
+	Assert::equal(['--verbose' => true, '--all' => true, '--output' => null], parseArgs($command, ['-va']));
+	Assert::equal(['--verbose' => true, '--all' => true, '--output' => 'file.txt'], parseArgs($command, ['-vao', 'file.txt']));
+	Assert::exception(fn() => parseArgs($command, ['-vx']), ParseException::class, 'Unknown option -vx.');
+	Assert::exception(fn() => parseArgs($command, ['-ov']), ParseException::class, 'Unknown option -ov.');
+});
+
+
+test('a defined multi-letter short option is not a bundle', function () {
+	$command = new Command;
+	$command->addFlag('--verbose', alias: '-v');
+	$command->addFlag('--verify', alias: '-vf');
+	Assert::equal(['--verbose' => null, '--verify' => true], parseArgs($command, ['-vf']));
+});
+
+
 test('control characters from the line are escaped in messages', function () {
 	$command = new Command;
 	$command->addArgument('input');
