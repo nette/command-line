@@ -113,8 +113,8 @@ test('bundled short flags', function () {
 
 	Assert::equal(['--verbose' => true, '--all' => true, '--output' => null], parseArgs($command, ['-va']));
 	Assert::equal(['--verbose' => true, '--all' => true, '--output' => 'file.txt'], parseArgs($command, ['-vao', 'file.txt']));
-	Assert::exception(fn() => parseArgs($command, ['-vx']), ParseException::class, 'Unknown option -vx.');
-	Assert::exception(fn() => parseArgs($command, ['-ov']), ParseException::class, 'Unknown option -ov.');
+	Assert::exception(fn() => parseArgs($command, ['-vx']), ParseException::class, 'Unknown option -vx.%A%');
+	Assert::exception(fn() => parseArgs($command, ['-ov']), ParseException::class, 'Unknown option -ov.%A%');
 });
 
 
@@ -123,6 +123,15 @@ test('a defined multi-letter short option is not a bundle', function () {
 	$command->addFlag('--verbose', alias: '-v');
 	$command->addFlag('--verify', alias: '-vf');
 	Assert::equal(['--verbose' => null, '--verify' => true], parseArgs($command, ['-vf']));
+});
+
+
+test('an unknown option suggests a close match', function () {
+	$command = new Command;
+	$command->addFlag('--verbose', alias: '-v');
+	$command->addOption('--output');
+	Assert::exception(fn() => parseArgs($command, ['--verbos']), ParseException::class, 'Unknown option --verbos. Did you mean --verbose?');
+	Assert::exception(fn() => parseArgs($command, ['--zzzzzz']), ParseException::class, 'Unknown option --zzzzzz.');
 });
 
 
