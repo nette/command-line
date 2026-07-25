@@ -69,7 +69,7 @@ final class Parser
 	private function collect(Command $root, array $argv): array
 	{
 		$command = $root;
-		$names = self::indexOptions($command);
+		[$names, $numeric] = self::indexOptions($command);
 		$arguments = $command->getArguments();
 		$occurrences = $extra = [];
 		$onlyPositional = false;
@@ -83,11 +83,19 @@ final class Parser
 
 			} elseif (
 				!$onlyPositional
-				&& !self::isOption($arg)
+				&& !self::isOption($arg, $numeric)
 				&& ($commands = $command->getCommands())
 			) {
 				$subcommand = array_values(array_filter($commands, fn(Command $candidate) => $candidate->name === $arg))[0] ?? null;
-				if (!$subcommand) {
+				if (!$subcommand && $arg !== '-' && str_starts_with($arg, '-')) { // a number such as -5, no command has such a name
+					$name = self::splitNameValue($arg)[0];
+					throw new ParseException(
+						self::describeUnknownOption($name, $command, $names),
+						$command,
+						reason: ParseFailure::UnknownOption,
+						token: $name,
+					);
+				} elseif (!$subcommand) {
 					$hint = self::suggest($arg, array_map(fn(Command $candidate) => (string) $candidate->name, $commands));
 					throw new ParseException(
 						"Unknown command '" . self::escape($arg) . "'." . ($hint === null ? '' : " Did you mean '$hint'?"),
@@ -98,11 +106,11 @@ final class Parser
 				}
 
 				$command = $subcommand;
-				$names = self::indexOptions($command);
+				[$names, $numeric] = self::indexOptions($command);
 				$arguments = $command->getArguments();
 				continue;
 
-			} elseif ($onlyPositional || !self::isOption($arg)) {
+			} elseif ($onlyPositional || !self::isOption($arg, $numeric)) {
 				$argument = current($arguments);
 				if (!$argument) {
 					$extra[] = $arg;
@@ -136,10 +144,11 @@ final class Parser
 				throw new ParseException("Option $option->name does not accept a value.", $command, reason: ParseFailure::UnexpectedValue, parameter: $option, token: $name);
 
 			} elseif ($value === self::OptionPresent && $option instanceof Option) {
-				$next = isset($argv[$i]) && !self::isOption($argv[$i]) ? $argv[$i] : null;
+				$next = isset($argv[$i]) && !self::isOption($argv[$i], $numeric) ? $argv[$i] : null;
 				if (!$option->valueOptional) {
 					$value = $next ?? throw new ParseException(
-						"Option $option->name requires a value.",
+						"Option $option->name requires a value."
+						. (preg_match('#^-\d#', $argv[$i] ?? '') ? ' A value starting with a dash is given as ' . self::escape("$option->name=$argv[$i]") . '.' : ''),
 						$command,
 						reason: ParseFailure::MissingValue,
 						parameter: $option,
@@ -221,8 +230,9 @@ final class Parser
 
 
 	/**
-	 * Indexes the options valid at the command by name and by alias.
-	 * @return array<string, Flag|Option>
+	 * Indexes the options valid at the command by name and by alias. Also tells whether one of them is named like
+	 * a negative number, such as -1.
+	 * @return array{array<string, Flag|Option>, bool}
 	 */
 	private static function indexOptions(Command $command): array
 	{
@@ -236,7 +246,8 @@ final class Parser
 			}
 		}
 
-		return $names;
+		$numeric = (bool) array_filter(array_keys($names), fn($name) => (bool) preg_match('#^-\d#', (string) $name));
+		return [$names, $numeric];
 	}
 
 
@@ -350,12 +361,18 @@ final class Parser
 
 
 	/**
-	 * Returns true if the token looks like an option, not a positional value. A lone "-" is a value by convention,
-	 * usually meaning stdin or stdout.
+	 * Returns true if the token looks like an option, not a positional value. A lone "-" is a value by convention
+	 * (usually meaning stdin/stdout), and so is a negative number such as -5 or -.5, unless an option is named like
+	 * a number, such as -1: then every -5 is an option, as in argparse.
+	 * @param  bool  $numeric  an option is named like a negative number
 	 */
-	private static function isOption(string $arg): bool
+	private static function isOption(string $arg, bool $numeric): bool
 	{
-		return $arg !== '' && $arg !== '-' && $arg[0] === '-';
+		if ($arg === '' || $arg === '-' || $arg[0] !== '-' || preg_match('#^-\.\d#', $arg)) {
+			return false;
+		}
+
+		return $numeric || !preg_match('#^-\d#', $arg);
 	}
 
 

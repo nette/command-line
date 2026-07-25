@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use Nette\CommandLine\{Command, Parser};
+use Nette\CommandLine\{Command, ParseException, Parser};
 use Tester\Assert;
 
 require __DIR__ . '/bootstrap.php';
@@ -58,4 +58,37 @@ test('wasProvided() tells a given value from the default', function () {
 	Assert::false($result->wasProvided('--dry-run'));
 	Assert::false($result->wasProvided('paths'));
 	Assert::exception(fn() => $result->wasProvided('--nope'), InvalidArgumentException::class, "Unknown parameter '--nope'.");
+});
+
+
+test('wasProvided() and foreach know a numeric name', function () {
+	$command = new Command;
+	$command->addFlag('-1');
+	$command->addOption('-5');
+	$command->addArgument('0');
+	$command->addArgument('123', optional: true);
+	$result = (new Parser)->parse($command, ['-1', '-5', 'x', 'a']);
+	Assert::true($result->wasProvided('-1'));
+	Assert::true($result->wasProvided('-5'));
+	Assert::true($result->wasProvided('0'));
+	Assert::false($result->wasProvided('123'));
+	Assert::same('a', $result['0']);
+
+	$names = [];
+	foreach ($result as $name => $value) {
+		$names[] = $name;
+	}
+
+	Assert::same(['-1', '-5', '0', '123'], $names);
+});
+
+
+test('a typo in a node with a numeric option is reported', function () {
+	$command = new Command;
+	$command->addFlag('-1');
+	Assert::exception(
+		fn() => (new Parser)->parse($command, ['--x']),
+		ParseException::class,
+		'Unknown option --x.',
+	);
 });
