@@ -152,6 +152,52 @@ test('a lone dash is a value', function () {
 });
 
 
+test('a negative number is a value, unless an option is named like a number', function () {
+	$command = new Command;
+	$command->addOption('--count');
+	$command->addArgument('offset', optional: true);
+	Assert::same(['--count' => '-1', 'offset' => '-2.5'], parseArgs($command, ['--count', '-1', '-2.5']));
+	Assert::same(['--count' => '-.5', 'offset' => '-.25'], parseArgs($command, ['--count', '-.5', '-.25']));
+	Assert::same(['--count' => '-1e3', 'offset' => '-2h'], parseArgs($command, ['--count', '-1e3', '-2h']));
+
+	$command->addFlag('-1');
+	$command->addFlag('-2');
+	$command->addFlag('-h');
+	Assert::equal(['--count' => null, 'offset' => null, '-1' => true, '-2' => true, '-h' => null], parseArgs($command, ['-12']));
+	Assert::equal(['--count' => null, 'offset' => null, '-1' => null, '-2' => true, '-h' => true], parseArgs($command, ['-2h']));
+	Assert::same('-5', parseArgs($command, ['--count=-5'])['--count']);
+	Assert::same('-5', parseArgs($command, ['--', '-5'])['offset']);
+	Assert::same('-.5', parseArgs($command, ['--count', '-.5'])['--count']);
+	Assert::exception(
+		fn() => parseArgs($command, ['--count', '-5']),
+		ParseException::class,
+		'Option --count requires a value. A value starting with a dash is given as --count=-5.',
+	);
+	Assert::exception(fn() => parseArgs($command, ['-5']), ParseException::class, 'Unknown option -5.');
+
+	$command = new Command;
+	$command->addFlag('--one', alias: '-1');
+	$command->addArgument('offset', optional: true);
+	Assert::exception(fn() => parseArgs($command, ['-5']), ParseException::class, 'Unknown option -5.'); // an alias counts too
+});
+
+
+test('an option named like a number counts from the node that selects it', function () {
+	$command = new Command;
+	$calc = $command->addCommand('calc');
+	$calc->addFlag('-1');
+	$calc->addArgument('x', optional: true);
+	$other = $command->addCommand('other');
+	$other->addArgument('x', optional: true);
+	Assert::same('-5', parseArgs($command, ['other', '-5'])['x']);
+	Assert::exception(fn() => parseArgs($command, ['calc', '-5']), ParseException::class, 'Unknown option -5.');
+	Assert::exception(fn() => parseArgs($command, ['-1']), ParseException::class, "Option -1 belongs to command 'calc'.");
+
+	$command->addFlag('-9'); // inherited by both commands
+	Assert::exception(fn() => parseArgs($command, ['other', '-5']), ParseException::class, 'Unknown option -5.');
+});
+
+
 test('-- makes the rest positional', function () {
 	$command = new Command;
 	$command->addFlag('--verbose', alias: '-v');
