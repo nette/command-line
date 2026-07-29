@@ -9,7 +9,7 @@ require __DIR__ . '/bootstrap.php';
 function app(bool $commandRequired = false): Command
 {
 	$cli = new Command('dresscode', commandRequired: $commandRequired);
-	$cli->addFlag('--help', alias: '-h');
+	$cli->addFlag('--help', alias: '-h', standalone: true);
 	$cli->addOption('--config', alias: '-c');
 	$check = $cli->addCommand('check', 'Report violations');
 	$check->addArgument('paths', optional: true, repeatable: true);
@@ -120,7 +120,7 @@ test('after the separator a command name is only a value', function () {
 });
 
 
-test('a command can be required', function () {
+test('a command can be required, a standalone flag still answers', function () {
 	Assert::false(app()->commandRequired);
 	$cli = app(commandRequired: true);
 	Assert::true($cli->commandRequired);
@@ -128,6 +128,7 @@ test('a command can be required', function () {
 	$e = Assert::exception(fn() => (new Parser)->parse($cli, ['-c', 'x.neon']), ParseException::class, 'Missing command.');
 	Assert::same($cli, $e->command);
 	Assert::same($cli->getCommand('check'), (new Parser)->parse($cli, ['check'])->command);
+	Assert::true((new Parser)->parse($cli, ['--help'])['--help']);
 
 	$remote = $cli->addCommand('remote', commandRequired: true);
 	$remote->addCommand('add');
