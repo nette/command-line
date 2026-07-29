@@ -34,11 +34,15 @@ final class Parser
 		}
 
 		$parameters = self::listParameters($selected);
-		if ($selected->commandRequired && $selected->getCommands()) {
+		$standalone = self::findStandalone($parameters, $occurrences);
+		if (!$standalone && $selected->commandRequired && $selected->getCommands()) {
 			throw new ParseException('Missing command.', $selected, reason: ParseFailure::MissingCommand);
 		}
 
-		$values = $this->complete($parameters, $this->evaluate($parameters, $occurrences, $selected));
+		$values = $standalone
+			// it answers on its own: only the flags are taken, they need no conversion, and nothing is checked or demanded
+			? $this->complete($parameters, $this->evaluate($parameters, self::filterFlags($parameters, $occurrences), $selected), demandArguments: false)
+			: $this->complete($parameters, $this->evaluate($parameters, $occurrences, $selected));
 
 		return new ParseResult($selected, $values, array_fill_keys(array_keys($occurrences), true), $argv === []);
 	}
@@ -57,6 +61,36 @@ final class Parser
 		}
 
 		return $parameters;
+	}
+
+
+	/**
+	 * @param  array<string, Parameter>  $parameters
+	 * @param  array<string, list<mixed>>  $occurrences
+	 * @return array<string, list<mixed>>  the occurrences of the standalone flags that were used
+	 */
+	private static function findStandalone(array $parameters, array $occurrences): array
+	{
+		return array_filter(
+			$occurrences,
+			fn(array $supplied, string|int $name) => $parameters[$name] instanceof Flag && $parameters[$name]->standalone && end($supplied) === true,
+			ARRAY_FILTER_USE_BOTH,
+		);
+	}
+
+
+	/**
+	 * @param  array<string, Parameter>  $parameters
+	 * @param  array<string, list<mixed>>  $occurrences
+	 * @return array<string, list<mixed>>  the occurrences of the flags
+	 */
+	private static function filterFlags(array $parameters, array $occurrences): array
+	{
+		return array_filter(
+			$occurrences,
+			fn(string|int $name) => $parameters[$name] instanceof Flag,
+			ARRAY_FILTER_USE_KEY,
+		);
 	}
 
 
@@ -208,14 +242,15 @@ final class Parser
 	 * value, so a normalizer may return null without the default value overwriting it.
 	 * @param  array<string, Parameter>  $parameters
 	 * @param  array<string, mixed>  $values
+	 * @param  bool  $demandArguments  false when a standalone flag answered instead
 	 * @return array<string, mixed>
 	 */
-	private function complete(array $parameters, array $values): array
+	private function complete(array $parameters, array $values, bool $demandArguments = true): array
 	{
 		foreach ($parameters as $name => $parameter) {
 			if (array_key_exists($name, $values)) {
 				continue;
-			} elseif ($parameter instanceof Argument && !$parameter->optional) {
+			} elseif ($demandArguments && $parameter instanceof Argument && !$parameter->optional) {
 				throw new ParseException("Missing required argument <$name>.", $parameter->command, reason: ParseFailure::MissingArgument, parameter: $parameter);
 			}
 
