@@ -152,6 +152,17 @@ test('a lone dash is a value', function () {
 });
 
 
+test('a negative number is a value, unless an option has its name', function () {
+	$command = new Command;
+	$command->addOption('--count');
+	$command->addArgument('offset', optional: true);
+	Assert::same(['--count' => '-1', 'offset' => '-2.5'], parseArgs($command, ['--count', '-1', '-2.5']));
+
+	$command->addFlag('-0');
+	Assert::true(parseArgs($command, ['-0'])['-0']);
+});
+
+
 test('-- makes the rest positional', function () {
 	$command = new Command;
 	$command->addFlag('--verbose', alias: '-v');

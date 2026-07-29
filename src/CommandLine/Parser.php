@@ -83,7 +83,7 @@ final class Parser
 
 			} elseif (
 				!$onlyPositional
-				&& !self::isOption($arg)
+				&& !self::isOption($arg, $names)
 				&& ($commands = $command->getCommands())
 			) {
 				$subcommand = array_values(array_filter($commands, fn(Command $candidate) => $candidate->name === $arg))[0] ?? null;
@@ -97,7 +97,7 @@ final class Parser
 				$arguments = $command->getArguments();
 				continue;
 
-			} elseif ($onlyPositional || !self::isOption($arg)) {
+			} elseif ($onlyPositional || !self::isOption($arg, $names)) {
 				$argument = current($arguments);
 				if (!$argument) {
 					$extra[] = $arg;
@@ -130,7 +130,7 @@ final class Parser
 				throw new ParseException("Option $option->name does not accept a value.", $command, reason: ParseError::UnexpectedValue, parameter: $option);
 
 			} elseif ($value === self::OptionPresent && $option instanceof Option && !$option->valueOptional) { // an optional value is only ever attached with =
-				if (isset($args[$i]) && !self::isOption($args[$i])) {
+				if (isset($args[$i]) && !self::isOption($args[$i], $names)) {
 					$value = $args[$i++];
 				} else {
 					throw new ParseException("Option $option->name requires a value.", $command, reason: ParseError::MissingValue, parameter: $option);
@@ -329,11 +329,17 @@ final class Parser
 
 	/**
 	 * Returns true if the token looks like an option, not a positional value. A lone "-" is a value by convention
-	 * (usually meaning stdin/stdout).
+	 * (usually meaning stdin/stdout), and so is a negative number, unless an option by that name is defined.
+	 * @param  array<string, Flag|Option>  $names
 	 */
-	private static function isOption(string $arg): bool
+	private static function isOption(string $arg, array $names): bool
 	{
-		return $arg !== '' && $arg !== '-' && $arg[0] === '-';
+		if ($arg === '' || $arg === '-' || $arg[0] !== '-') {
+			return false;
+		}
+
+		$name = self::splitNameValue($arg)[0];
+		return !preg_match('#^-\d#', $arg) || isset($names[$name]);
 	}
 
 

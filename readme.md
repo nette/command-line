@@ -113,11 +113,12 @@ $command->addArgument('output', optional: true);
 // (not used)  → null
 ```
 
-Arguments can appear anywhere on the command line, before or after the options. Everything after a lone `--` is positional even if it starts with a dash, and a lone `-` is always a value (by convention it means stdin or stdout):
+Arguments can appear anywhere on the command line, before or after the options. Everything after a lone `--` is positional even if it starts with a dash, and a lone `-` is always a value (by convention it means stdin or stdout). A negative number is a value too, unless an option of that name is defined:
 
 ```php
 // script.php -- --weird  → input = '--weird'
 // script.php -           → input = '-'
+// script.php -1          → input = '-1'
 ```
 
 Several single-letter flags can be written as one token: `-va` means `-v -a`, and the last letter may take a value, so `-vao out.txt` means `-v -a -o out.txt`.

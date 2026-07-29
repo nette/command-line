@@ -75,6 +75,8 @@ Consequences worth knowing:
   option of another branch is reported as belonging to its command. The result holds only
   the parameters on the path to the selected node.
 - **After `--` a command name is a plain value**, no command is selected any more.
+- **A token that looks like a negative number is a value** unless an option of that name is
+  valid at the node, so telling an option from a value needs the options of the node.
 - **Nothing asks `isset()` about a value while parsing**, so a normalizer may legitimately
   return `null` without the default overwriting it.
 - **`valueOptional` says only what happens when the option is present**; the default value
