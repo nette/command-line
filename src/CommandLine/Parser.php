@@ -103,7 +103,7 @@ final class Parser
 	private function collect(Command $root, array $argv): array
 	{
 		$command = $root;
-		[$names, $numeric] = self::indexOptions($command);
+		[$names, $negations, $numeric] = self::indexOptions($command);
 		$arguments = $command->getArguments();
 		$occurrences = $extra = [];
 		$onlyPositional = false;
@@ -124,7 +124,7 @@ final class Parser
 				if (!$subcommand && $arg !== '-' && str_starts_with($arg, '-')) { // a number such as -5, no command has such a name
 					$name = self::splitNameValue($arg)[0];
 					throw new ParseException(
-						self::describeUnknownOption($name, $command, $names),
+						self::describeUnknownOption($name, $command, $names + $negations),
 						$command,
 						reason: ParseFailure::UnknownOption,
 						token: $name,
@@ -140,7 +140,7 @@ final class Parser
 				}
 
 				$command = $subcommand;
-				[$names, $numeric] = self::indexOptions($command);
+				[$names, $negations, $numeric] = self::indexOptions($command);
 				$arguments = $command->getArguments();
 				continue;
 
@@ -159,6 +159,15 @@ final class Parser
 			}
 
 			[$name, $value] = self::splitNameValue($arg);
+			if (isset($negations[$name])) {
+				if ($value !== self::OptionPresent) {
+					throw new ParseException("Option $name does not accept a value.", $command, reason: ParseFailure::UnexpectedValue, parameter: $negations[$name], token: $name);
+				}
+
+				$occurrences[$negations[$name]->name][] = false;
+				continue;
+			}
+
 			$option = $names[$name] ?? null;
 			if (!$option) {
 				if ($value === self::OptionPresent && ($bundle = self::expandBundle($name, $names)) !== null) {
@@ -167,7 +176,7 @@ final class Parser
 				}
 
 				throw new ParseException(
-					self::describeUnknownOption($name, $command, $names),
+					self::describeUnknownOption($name, $command, $names + $negations),
 					$command,
 					reason: ParseFailure::UnknownOption,
 					token: $name,
@@ -265,24 +274,28 @@ final class Parser
 
 
 	/**
-	 * Indexes the options valid at the command by name and by alias. Also tells whether one of them is named like
-	 * a negative number, such as -1.
-	 * @return array{array<string, Flag|Option>, bool}
+	 * Indexes the options valid at the command by name and by alias, and apart from them by the negation of a flag.
+	 * Also tells whether one of them is named like a negative number, such as -1.
+	 * @return array{array<string, Flag|Option>, array<string, Flag>, bool}
 	 */
 	private static function indexOptions(Command $command): array
 	{
-		$names = [];
+		$names = $negations = [];
 		foreach ($command->getPath() as $level) {
 			foreach ($level->getOptions() as $option) {
 				$names[$option->name] = $option;
 				if ($option->alias !== null) {
 					$names[$option->alias] = $option;
 				}
+
+				if ($option instanceof Flag && $option->negation !== null) {
+					$negations[$option->negation] = $option;
+				}
 			}
 		}
 
 		$numeric = (bool) array_filter(array_keys($names), fn($name) => (bool) preg_match('#^-\d#', (string) $name));
-		return [$names, $numeric];
+		return [$names, $negations, $numeric];
 	}
 
 

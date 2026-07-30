@@ -2,7 +2,7 @@
 
 // A standalone flag answers on its own: --help has to work before the configuration is read,
 // the paths are resolved and the locks are taken, so nothing else may be validated or converted.
-// The other flags need no conversion, so they are taken as given.
+// The other flags need no conversion, so they are taken as given, and --help --no-color can draw the help plain.
 
 use Nette\CommandLine\{Command, ParseException, Parser};
 use Tester\Assert;
@@ -40,9 +40,11 @@ test('nothing else is converted or checked', function () {
 
 test('the other flags are taken, the options with a value and the arguments are not', function () {
 	$command = cli();
-	$command->addFlag('--verbose', alias: '-v', repeatable: true);
-	$result = (new Parser)->parse($command, ['-v', '--help', '-v', '--jobs=3', 'in']);
-	Assert::same([true, true], $result['--verbose']);
+	$command->addFlag('--color', negatable: true, default: true);
+	$command->addFlag('--verbose', alias: '-v', negatable: true, repeatable: true);
+	$result = (new Parser)->parse($command, ['-v', '--no-color', '--help', '--no-verbose', '-v', '--jobs=3', 'in']);
+	Assert::false($result['--color']);
+	Assert::same([true, false, true], $result['--verbose']);
 	Assert::same('8', $result['--jobs']);
 	Assert::true($result->wasProvided('--jobs')); // given, though not taken
 	Assert::null($result['input']);
@@ -89,4 +91,16 @@ test('it answers for the command the line runs', function () {
 		Assert::same($check, $result->command);
 		Assert::equal(['--help' => true, 'paths' => null], $result->toArray());
 	}
+});
+
+
+test('a negated standalone flag does not answer', function () {
+	$command = new Command;
+	$command->addFlag('--help', standalone: true, negatable: true);
+	$command->addArgument('input');
+	Assert::exception(fn() => parseArgs($command, ['--no-help']), ParseException::class, 'Missing required argument <input>.');
+	Assert::same(['--help' => false, 'input' => 'x'], parseArgs($command, ['--no-help', 'x']));
+
+	$command->addFlag('--version', standalone: true);
+	Assert::false(parseArgs($command, ['--version', '--no-help'])['--help']); // taken while another one answers
 });
