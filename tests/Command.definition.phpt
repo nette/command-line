@@ -37,9 +37,10 @@ test('parameters are returned and can be found again', function () {
 
 test('the definition can be read but not changed from outside', function () {
 	$command = new Command('tool');
-	$verbose = $command->addFlag('--verbose', alias: '-v');
+	$verbose = $command->addFlag('--verbose', alias: '-v', negatable: true);
 
 	Assert::exception(fn() => $verbose->alias = '-x', Error::class, 'Cannot modify readonly property Nette\CommandLine\Parameters\Flag::$alias');
+	Assert::exception(fn() => $verbose->negation = '--not-verbose', Error::class, 'Cannot modify readonly property Nette\CommandLine\Parameters\Flag::$negation');
 	Assert::exception(fn() => $command->name = 'other', Error::class, 'Cannot modify readonly property Nette\CommandLine\Command::$name');
 	Assert::same([$verbose], $command->getParameters());
 });
@@ -128,17 +129,45 @@ test('a parameter refused is not added', function () {
 });
 
 
-test('an alias is not the name', function () {
-	Assert::exception(fn() => (new Command)->addOption('-o', alias: '-o'), InvalidArgumentException::class, "Alias '-o' of option -o is its name.");
-	Assert::exception(fn() => (new Command)->addFlag('-v', alias: '-v'), InvalidArgumentException::class, "Alias '-v' of option -v is its name.");
+test('the negation of a flag is a name too', function () {
+	Assert::exception(
+		fn() => (new Command)->addFlag('-c', negatable: true),
+		InvalidArgumentException::class,
+		'Flag -c cannot be negated, only a flag with a long name such as --color can.',
+	);
+
+	$command = new Command;
+	$color = $command->addFlag('--color', negatable: true);
+	Assert::same('--no-color', $color->negation);
+	Assert::exception(fn() => $command->addOption('--no-color'), InvalidArgumentException::class, "Option '--no-color' is already defined.");
+
+	$command = new Command;
+	$command->addOption('--no-color');
+	Assert::exception(fn() => $command->addFlag('--color', negatable: true), InvalidArgumentException::class, "Option '--no-color' is already defined.");
+	Assert::null($command->addFlag('--colour')->negation);
 });
 
 
-test('an option is used by its name and its alias', function () {
+test('an alias is neither the name nor the negation', function () {
+	Assert::exception(fn() => (new Command)->addOption('-o', alias: '-o'), InvalidArgumentException::class, "Alias '-o' of option -o is its name.");
+	Assert::exception(fn() => (new Command)->addFlag('-v', alias: '-v'), InvalidArgumentException::class, "Alias '-v' of option -v is its name.");
+	Assert::exception(
+		fn() => (new Command)->addFlag('--color', alias: '--no-color', negatable: true),
+		InvalidArgumentException::class,
+		"Alias '--no-color' of option --color is its negation.",
+	);
+});
+
+
+test('an option is used by its name, its alias and the negation of a flag', function () {
 	$command = new Command;
+	$color = $command->addFlag('--color', alias: '-c', negatable: true);
 	$output = $command->addOption('--output', alias: '-o');
 
-	Assert::true($output->hasName('--output'));
+	Assert::true($color->hasName('--color'));
+	Assert::true($color->hasName('-c'));
+	Assert::true($color->hasName('--no-color'));
+	Assert::false($color->hasName('--no-colour'));
 	Assert::true($output->hasName('-o'));
 	Assert::false($output->hasName('--no-output'));
 });

@@ -11,12 +11,15 @@ test('the exception tells what was wrong and with which parameter', function () 
 	$output = $command->addOption('--output');
 	$verbose = $command->addFlag('--verbose');
 	$input = $command->addArgument('input', enum: ['a']);
+	$command->addFlag('--color', alias: '-c', negatable: true);
 	$command->addOption('--level', alias: '-l');
 	$cases = [
 		[['--nope=1', 'a'], ParseFailure::UnknownOption, null, '--nope'],
+		[['-cx', 'a'], ParseFailure::UnknownOption, null, '-cx'],
 		[['a', '--output'], ParseFailure::MissingValue, $output, '--output'],
 		[['a', '-l'], ParseFailure::MissingValue, $command->getParameter('--level'), '-l'],
 		[['a', '--verbose=1'], ParseFailure::UnexpectedValue, $verbose, '--verbose'],
+		[['a', '--no-color=1'], ParseFailure::UnexpectedValue, $command->getParameter('--color'), '--no-color'],
 		[['a', 'b', 'c'], ParseFailure::UnexpectedArgument, null, 'b'],
 		[[], ParseFailure::MissingArgument, $input, null],
 		[['x'], ParseFailure::InvalidValue, $input, 'x'],

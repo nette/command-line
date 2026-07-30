@@ -15,6 +15,10 @@ use Nette\CommandLine\Command;
  */
 final class Flag extends Parameter
 {
+	/** the name that turns the flag off, such as --no-color, or null when the flag is not negatable */
+	public readonly ?string $negation;
+
+
 	/** @internal use Command::addFlag() */
 	public function __construct(
 		Command $command,
@@ -24,23 +28,31 @@ final class Flag extends Parameter
 		public readonly ?string $alias = null,
 		/** answers on its own like --help: the parser returns it as true, the other flags as given and every other parameter at its default, checking or converting nothing */
 		public readonly bool $standalone = false,
+		/** --no-name turns the flag off, which parses as false */
+		public readonly bool $negatable = false,
 		mixed $default = null,
 		bool $repeatable = false,
 	) {
 		NameSyntax::assertOptionName($name, $alias);
+		$negation = $negatable ? '--no-' . substr($name, 2) : null;
 		if ($alias === $name) {
 			throw new \InvalidArgumentException("Alias '$alias' of option $name is its name.");
+		} elseif ($negatable && !str_starts_with($name, '--')) {
+			throw new \InvalidArgumentException("Flag $name cannot be negated, only a flag with a long name such as --color can.");
+		} elseif ($negation !== null && $alias === $negation) {
+			throw new \InvalidArgumentException("Alias '$alias' of option $name is its negation.");
 		}
 
 		parent::__construct($command, $name, $description, $default, $repeatable);
+		$this->negation = $negation;
 	}
 
 
 	/**
-	 * Tells whether the flag is used by this name or its alias.
+	 * Tells whether the flag is used by this name, its alias or its negation.
 	 */
 	public function hasName(string $name): bool
 	{
-		return $name === $this->name || $name === $this->alias;
+		return $name === $this->name || $name === $this->alias || $name === $this->negation;
 	}
 }
