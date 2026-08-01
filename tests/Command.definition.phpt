@@ -7,6 +7,31 @@ use Tester\Assert;
 require __DIR__ . '/bootstrap.php';
 
 
+enum Level: int
+{
+	case Low = 1;
+	case High = 2;
+}
+
+
+enum Nothing: string
+{
+}
+
+
+enum Mode: string
+{
+	case Check = 'check';
+}
+
+
+enum WithEmpty: string
+{
+	case Empty = '';
+	case A = 'a';
+}
+
+
 test('parameters are returned and can be found again', function () {
 	$command = new Command('tool', 'Does things');
 	$verbose = $command->addFlag('--verbose', 'Talk more', alias: '-v');
@@ -232,17 +257,36 @@ test('a command named like a value an optional value would take is refused', fun
 	$remote->addCommand('fix');
 
 	$program = new Command;
+	$program->addCommand('remote')->addCommand('check');
+	Assert::exception(
+		fn() => $program->addOption('--mode', valueOptional: true, enum: Mode::class),
+		InvalidArgumentException::class,
+		"Value 'check' of option --mode is the name of command 'remote check', which it would take.",
+	);
+
+	$program = new Command;
 	$program->addCommand('a')->addOption('--mode', valueOptional: true, enum: ['check']);
 	Assert::same('check', $program->addCommand('check')->name); // a sibling branch
 });
 
 
-test('an enum is a list of values', function () {
+test('an enum is a list of values or a backed enum', function () {
 	$command = new Command;
 	$list = $command->addOption('--level', enum: ['low', 'high']);
 	Assert::same(['low', 'high'], $list->enum);
+	Assert::null($list->enumClass);
 
+	$backed = $command->addArgument('level', enum: Level::class);
+	Assert::same(['1', '2'], $backed->enum);
+	Assert::same(Level::class, $backed->enumClass);
+
+	Assert::exception(
+		fn() => $command->addOption('--mode', enum: 'stdClass'),
+		InvalidArgumentException::class,
+		"Enum of --mode must be a list of values or a backed enum, 'stdClass' given.",
+	);
 	Assert::exception(fn() => $command->addOption('--mode', enum: []), InvalidArgumentException::class, 'Enum of --mode has no values.');
+	Assert::exception(fn() => $command->addOption('--mode', enum: Nothing::class), InvalidArgumentException::class, 'Enum of --mode has no values.');
 	foreach ([[1, 2], ['a' => 'x'], [true]] as $enum) {
 		Assert::exception(
 			fn() => $command->addOption('--mode', enum: $enum),
@@ -252,11 +296,16 @@ test('an enum is a list of values', function () {
 	}
 
 	Assert::exception(fn() => $command->addOption('--mode', enum: ['', 'a']), InvalidArgumentException::class, 'Enum of --mode has an empty value.');
+	Assert::exception(fn() => $command->addOption('--mode', enum: WithEmpty::class), InvalidArgumentException::class, 'Enum of --mode has an empty value.');
 });
 
 
 test('a value is checked and converted by its parameter, also outside the parser', function () {
 	$command = new Command;
+	$level = $command->addOption('--level', enum: Level::class, normalizer: fn(Level $level) => $level->name);
+	Assert::same('High', $level->normalize('2'));
+	Assert::exception(fn() => $level->normalize('3'), InvalidArgumentException::class, "expects 1 or 2, '3' given.");
+
 	$mode = $command->addArgument('mode', enum: ['fast', 'safe', 'slow']);
 	Assert::same('safe', $mode->normalize('safe'));
 	Assert::exception(fn() => $mode->normalize('x'), InvalidArgumentException::class, "expects fast, safe or slow, 'x' given.");
