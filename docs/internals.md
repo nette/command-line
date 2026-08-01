@@ -100,8 +100,9 @@ Consequences worth knowing:
   `\Error` is not caught at all: a broken normalizer is a bug, not a bad value. The
   `catch (\Exception)` is deliberate, and the `dresscode:ignore` comment beside it must
   stand alone at the end of the line, since text after it is read as rule names.
-- **The model describes a value only where another part reads it**: the enum stays a setting,
-  because the error message shows its values, while a conversion nobody else reads is a closure.
+- A path is resolved by `Normalizers::realPath()`, an ordinary normalizer. **The model
+  describes a value only where another part reads it**: the enum stays a setting, because the
+  error message shows its values, while a conversion nobody else reads is a closure.
 - **`ParseException::$command` is never null**; it is the node where the line went wrong,
   so the application can print the help of exactly that command. A bad value is judged
   after the whole line is read, so it reports the selected node, even for an option

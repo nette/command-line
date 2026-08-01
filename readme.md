@@ -201,14 +201,33 @@ A repeatable argument takes all the remaining values, so it has to be the last o
 Transforming Values
 -------------------
 
-A normalizer transforms the value read from the command line. It is any closure, such as `fn($v) => strtolower($v)`:
+A normalizer transforms the value read from the command line. The ready-made ones are in `Normalizers`: `int()` and `float()` convert a number and refuse anything else, optionally within a range, and `realPath()` resolves a path. A normalizer of your own is any closure, such as `fn($v) => strtoupper($v)`:
 
 ```php
-$command->addOption('--format', normalizer: fn($v) => strtolower($v));
-// --format JSON  → 'json'
+use Nette\CommandLine\Normalizers;
+
+$command->addOption('--count', normalizer: Normalizers::int(min: 1));
+// --count 42   → 42
+// --count abc  → throws "Option --count: expects an integer, 'abc' given."
+// --count 0    → throws "Option --count: expects at least 1, 0 given."
 ```
 
-It runs only on values that really come from the command line: not on the default value, and not on the `true` of an option used without its optional value. A normalizer reports a bad value by throwing an exception. The parser turns it into a `ParseException` naming the parameter, so the user reads `Option --format:` followed by the message of the exception instead of a stack trace. An `\Error` is not caught, because a broken normalizer is a bug, not a bad value.
+It runs only on values that really come from the command line: not on the default value, and not on the `true` of an option used without its optional value. A normalizer reports a bad value by throwing an exception. The parser turns it into a `ParseException` naming the parameter, so the user reads `Option --count: expects an integer, 'abc' given.` instead of a stack trace. An `\Error` is not caught, because a broken normalizer is a bug, not a bad value.
+
+`realPath()` resolves the value to an absolute path and refuses a path that does not exist, and an empty one:
+
+```php
+$command->addOption('--config', normalizer: Normalizers::realPath());
+// --config app.ini      → '/full/path/to/app.ini'
+// --config missing.ini  → throws "Option --config: file path 'missing.ini' not found."
+```
+
+To change the path first, call it from a normalizer of your own:
+
+```php
+$realPath = Normalizers::realPath();
+$command->addOption('--config', normalizer: fn($v) => $realPath("config/$v"));
+```
 
 
 Validated Values
@@ -234,7 +253,7 @@ Tools like `git` or `composer` have commands: `git commit`, `composer install`. 
 
 ```php
 $cli = new Command('dresscode');
-$cli->addOption('--config', 'Configuration file', alias: '-c');
+$cli->addOption('--config', 'Configuration file', alias: '-c', normalizer: Normalizers::realPath());
 
 $check = $cli->addCommand('check', 'Report violations');
 $check->addArgument('paths', 'Files or directories', optional: true, repeatable: true);
