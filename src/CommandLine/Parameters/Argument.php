@@ -17,7 +17,7 @@ final class Argument extends ValueParameter
 {
 	/**
 	 * @internal use Command::addArgument()
-	 * @param  ?list<non-empty-string>  $enum
+	 * @param  list<non-empty-string>|class-string<\BackedEnum>|null  $enum
 	 * @param  ?(\Closure(mixed): mixed)  $normalizer
 	 */
 	public function __construct(
@@ -26,7 +26,7 @@ final class Argument extends ValueParameter
 		?string $description = null,
 		/** the argument may be left out */
 		public readonly bool $optional = false,
-		?array $enum = null,
+		array|string|null $enum = null,
 		?\Closure $normalizer = null,
 		mixed $default = null,
 		bool $repeatable = false,
