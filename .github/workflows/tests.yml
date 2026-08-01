@@ -28,6 +28,25 @@ jobs:
                   path: tests/output
 
 
+    tests_windows:
+        runs-on: windows-latest
+        name: PHP 8.5 tests on Windows
+        steps:
+            - uses: actions/checkout@v6
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: 8.5
+                  coverage: none
+
+            - run: composer install --no-progress --prefer-dist
+            - run: composer tester
+            - if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: output-windows
+                  path: tests/output
+
+
     code_coverage:
         name: Code Coverage
         runs-on: ubuntu-latest
