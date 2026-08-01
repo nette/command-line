@@ -8,6 +8,13 @@ use Tester\Assert;
 require __DIR__ . '/bootstrap.php';
 
 
+enum Level: int
+{
+	case Low = 1;
+	case High = 2;
+}
+
+
 test('parameters are returned and can be found again', function () {
 	$command = new Command('tool', 'Does things');
 	$verbose = $command->addFlag('--verbose', 'Talk more', alias: '-v');
@@ -186,11 +193,29 @@ test('arguments and subcommands exclude each other', function () {
 });
 
 
+test('an enum is a list of values or a backed enum', function () {
+	$command = new Command;
+	$list = $command->addOption('--level', enum: ['low', 'high']);
+	Assert::same(['low', 'high'], $list->enum);
+	Assert::null($list->enumClass);
+
+	$backed = $command->addArgument('level', enum: Level::class);
+	Assert::same(['1', '2'], $backed->enum);
+	Assert::same(Level::class, $backed->enumClass);
+
+	Assert::exception(
+		fn() => $command->addOption('--mode', enum: 'stdClass'),
+		InvalidArgumentException::class,
+		"Enum of --mode must be a list of values or a backed enum, 'stdClass' given.",
+	);
+});
+
+
 test('a value is checked and converted by its parameter, also outside the parser', function () {
 	$command = new Command;
-	$level = $command->addOption('--level', enum: ['low', 'high'], normalizer: strtoupper(...));
-	Assert::same('HIGH', $level->normalize('high'));
-	Assert::exception(fn() => $level->normalize('x'), InvalidArgumentException::class, "expects low or high, 'x' given.");
+	$level = $command->addOption('--level', enum: Level::class, normalizer: fn(Level $level) => $level->name);
+	Assert::same('High', $level->normalize('2'));
+	Assert::exception(fn() => $level->normalize('3'), InvalidArgumentException::class, "expects 1 or 2, '3' given.");
 
 	$mode = $command->addArgument('mode', enum: ['fast', 'safe', 'slow']);
 	Assert::same('safe', $mode->normalize('safe'));

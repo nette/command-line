@@ -49,6 +49,17 @@ test('optional value: the sentinel is not the default', function () {
 });
 
 
+test('an optional value takes the next token only when it is one of the enum values', function () {
+	$command = new Command;
+	$command->addOption('--color', valueOptional: true, enum: ['always', 'never']);
+	$command->addArgument('input', optional: true);
+	Assert::same(['--color' => 'never', 'input' => null], parseArgs($command, ['--color', 'never']));
+	Assert::same(['--color' => 'always', 'input' => null], parseArgs($command, ['--color=always']));
+	Assert::same(['--color' => true, 'input' => 'src'], parseArgs($command, ['--color', 'src'])); // not a value of its own
+	Assert::same(['--color' => true, 'input' => null], parseArgs($command, ['--color']));
+});
+
+
 test('required value: the default applies when the option is absent', function () {
 	$command = new Command;
 	$command->addOption('--x', default: 'fb');

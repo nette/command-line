@@ -18,7 +18,7 @@ final class Option extends ValueParameter
 {
 	/**
 	 * @internal use Command::addOption()
-	 * @param  ?list<string>  $enum
+	 * @param  list<string>|class-string<\BackedEnum>|null  $enum
 	 * @param  ?(\Closure(mixed): mixed)  $normalizer
 	 */
 	public function __construct(
@@ -29,7 +29,7 @@ final class Option extends ValueParameter
 		public readonly ?string $alias = null,
 		/** the option may be used without its value, which then parses as true; a value is only ever attached with = */
 		public readonly bool $valueOptional = false,
-		?array $enum = null,
+		array|string|null $enum = null,
 		?\Closure $normalizer = null,
 		mixed $default = null,
 		bool $repeatable = false,

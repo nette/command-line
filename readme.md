@@ -90,7 +90,7 @@ $command->addOption('--output', alias: '-o');
 // (not used)           → null
 ```
 
-The option itself is always optional, but when it is used, its value is required. Pass `valueOptional: true` to allow the option without a value; it then parses as `true`. Such a value can be given only attached with `=`, so the next token is never taken for it:
+The option itself is always optional, but when it is used, its value is required. Pass `valueOptional: true` to allow the option without a value; it then parses as `true`. Such a value is given attached with `=`, so the next token is not taken for it and cannot be swallowed:
 
 ```php
 $command->addOption('--format', valueOptional: true);
@@ -98,6 +98,16 @@ $command->addOption('--format', valueOptional: true);
 // --format       → true
 // --format json  → true, and json is an argument
 // (not used)     → null
+```
+
+With an `enum` the next token is taken after all, but only when it is one of the values, so both spellings of `--color never` work and nothing else is ever swallowed:
+
+```php
+$command->addOption('--color', valueOptional: true, enum: ['always', 'never']);
+// --color=never  → 'never'
+// --color never  → 'never'
+// --color        → true
+// --color src    → true, and src is an argument
 ```
 
 When the same option is used several times, the last value wins, unless it is repeatable. The earlier values are neither checked nor converted.
@@ -154,6 +164,20 @@ Restricting Values
 ```php
 $command->addOption('--format', enum: ['json', 'xml', 'csv']);
 // --format yaml  → throws "Option --format: expects json, xml or csv, 'yaml' given."
+```
+
+Give it a backed enum instead and the value parses directly as its case:
+
+```php
+enum Format: string
+{
+	case Json = 'json';
+	case Xml = 'xml';
+}
+
+$command->addOption('--format', enum: Format::class, default: Format::Json);
+// --format xml  → Format::Xml
+// (not used)    → Format::Json
 ```
 
 

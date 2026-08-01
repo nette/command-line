@@ -61,9 +61,9 @@ The split exists because presence has to be recorded separately from value:
    It resolves aliases and bundles. An option used without a value yields the
    `OptionPresent = true` sentinel.
 2. **`evaluate()`** converts what was actually supplied through `ValueParameter::normalize()`:
-   the enum check on the raw string, then the normalizer. The parameter knows what a valid
-   value is; the parser only keeps the sentinel away from it and turns its exception into a
-   `ParseException`.
+   the enum check on the raw string, then the case of a `BackedEnum`, then the normalizer. The
+   parameter knows what a valid value is; the parser only keeps the sentinel away from it and
+   turns its exception into a `ParseException`.
 3. **`complete()`** fills in the names that did not occur, and demands required arguments.
 
 Consequences worth knowing:
@@ -88,8 +88,9 @@ Consequences worth knowing:
   on another having run.
 - **The sentinel is a public value.** A bare `--flag` parses as the literal `true`, and
   neither the enum check nor the normalizer sees it. An optional-value option used bare is
-  therefore `true`, not its default. **An optional value is only ever attached with `=`**;
-  the next token is never taken for it, so it cannot swallow an argument or a command name.
+  therefore `true`, not its default. **An optional value is attached with `=`**; the next token
+  is taken only when the option has an `enum` and the token is one of its values, so `--color never`
+  works while nothing outside the enum, an argument or a command name, is ever swallowed.
 - **An input wrong in more than one way reports the syntax problem, not the value problem**,
   because all the tokens are read before any value is converted. This cannot be reordered
   without losing the reason for the phases.

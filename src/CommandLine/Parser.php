@@ -129,11 +129,15 @@ final class Parser
 			if ($value !== self::OptionPresent && $option instanceof Flag) {
 				throw new ParseException("Option $option->name does not accept a value.", $command, reason: ParseError::UnexpectedValue, parameter: $option);
 
-			} elseif ($value === self::OptionPresent && $option instanceof Option && !$option->valueOptional) { // an optional value is only ever attached with =
-				if (isset($args[$i]) && !self::isOption($args[$i], $names)) {
+			} elseif ($value === self::OptionPresent && $option instanceof Option) {
+				$next = isset($args[$i]) && !self::isOption($args[$i], $names) ? $args[$i] : null;
+				if (!$option->valueOptional) {
+					$value = $next ?? throw new ParseException("Option $option->name requires a value.", $command, reason: ParseError::MissingValue, parameter: $option);
+					$i++;
+
+				} elseif ($next !== null && in_array($next, $option->enum ?? [], true)) {
+					// an optional value is attached with =, unless the next token is one of the enum values
 					$value = $args[$i++];
-				} else {
-					throw new ParseException("Option $option->name requires a value.", $command, reason: ParseError::MissingValue, parameter: $option);
 				}
 			}
 

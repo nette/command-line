@@ -55,7 +55,7 @@ final class Command
 	 * Adds an option with a value such as --output <file>.
 	 * @param  ?string  $alias  a short name such as -o
 	 * @param  bool  $valueOptional  the option may be used without its value, which then parses as true; a value is only ever attached with =
-	 * @param  ?list<string>  $enum  the allowed values
+	 * @param  list<string>|class-string<\BackedEnum>|null  $enum  the allowed values, or a backed enum whose case the value parses as
 	 * @param  ?(\Closure(mixed): mixed)  $normalizer  converts the value and reports a bad one by throwing
 	 */
 	public function addOption(
@@ -63,7 +63,7 @@ final class Command
 		?string $description = null,
 		?string $alias = null,
 		bool $valueOptional = false,
-		?array $enum = null,
+		array|string|null $enum = null,
 		?\Closure $normalizer = null,
 		mixed $default = null,
 		bool $repeatable = false,
@@ -77,14 +77,14 @@ final class Command
 
 	/**
 	 * Adds a positional argument such as <input>.
-	 * @param  ?list<string>  $enum  the allowed values
+	 * @param  list<string>|class-string<\BackedEnum>|null  $enum  the allowed values, or a backed enum whose case the value parses as
 	 * @param  ?(\Closure(mixed): mixed)  $normalizer  converts the value and reports a bad one by throwing
 	 */
 	public function addArgument(
 		string $name,
 		?string $description = null,
 		bool $optional = false,
-		?array $enum = null,
+		array|string|null $enum = null,
 		?\Closure $normalizer = null,
 		mixed $default = null,
 		bool $repeatable = false,

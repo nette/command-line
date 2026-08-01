@@ -8,6 +8,20 @@ use Tester\Assert;
 require __DIR__ . '/bootstrap.php';
 
 
+enum Format: string
+{
+	case Json = 'json';
+	case Xml = 'xml';
+}
+
+
+enum Level: int
+{
+	case Low = 1;
+	case High = 2;
+}
+
+
 test('flag', function () {
 	$command = new Command;
 	$command->addFlag('--verbose', alias: '-v');
@@ -48,6 +62,19 @@ test('enum', function () {
 	$command = new Command;
 	$command->addArgument('mode', enum: ['fast', 'safe']);
 	Assert::exception(fn() => parseArgs($command, ['slow']), ParseException::class, "Argument <mode>: expects fast or safe, 'slow' given.");
+});
+
+
+test('a backed enum parses as its case', function () {
+	$command = new Command;
+	$command->addOption('--format', enum: Format::class, default: Format::Json);
+	$command->addOption('--level', enum: Level::class, repeatable: true);
+	Assert::same(['--format' => Format::Json, '--level' => []], parseArgs($command, []));
+	Assert::same(
+		['--format' => Format::Xml, '--level' => [Level::High, Level::Low]],
+		parseArgs($command, ['--format=xml', '--level=2', '--level=1']),
+	);
+	Assert::exception(fn() => parseArgs($command, ['--level=3']), ParseException::class, "Option --level: expects 1 or 2, '3' given.");
 });
 
 
