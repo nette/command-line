@@ -4,14 +4,15 @@ on: [push, pull_request]
 
 jobs:
     tests:
-        runs-on: ubuntu-latest
+        runs-on: ${{ matrix.os }}
         strategy:
             matrix:
+                os: [ubuntu-latest, windows-latest]
                 php: ['8.2', '8.3', '8.4', '8.5', '8.6']
 
             fail-fast: false
 
-        name: PHP ${{ matrix.php }} tests
+        name: PHP ${{ matrix.php }} tests on ${{ matrix.os }}
         steps:
             - uses: actions/checkout@v7
             - uses: shivammathur/setup-php@v2
@@ -24,8 +25,8 @@ jobs:
             - if: failure()
               uses: actions/upload-artifact@v7
               with:
-                  name: output-${{ matrix.php }}
-                  path: tests/output
+                  name: output-${{ matrix.php }}-${{ matrix.os }}
+                  path: tests/**/output
 
 
     code_coverage:

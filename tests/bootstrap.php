@@ -8,3 +8,9 @@ if (@!include __DIR__ . '/../vendor/autoload.php') { // @ dependencies may not b
 // configure environment
 Tester\Environment::setup();
 Tester\Environment::setupFunctions();
+
+if (!defined('STDOUT')) { // php-cgi has no standard streams
+	define('STDIN', fopen('php://stdin', 'r'));
+	define('STDOUT', fopen('php://stdout', 'w'));
+	define('STDERR', fopen('php://stderr', 'w'));
+}
