@@ -109,6 +109,11 @@ Consequences worth knowing:
   inherited from above. Every exception the parser throws names a `ParseError` reason; one a
   normalizer throws itself passes through with the default reason `InvalidValue`.
 
+**`standalone`** is answered between phase 1 and phase 2, so the command is already selected:
+if such a flag of the selected path occurred, every other parameter of the path is its
+default and phases 2 and 3 check, convert and demand nothing. The line still has to be a
+line, because phase 1 has already run.
+
 ## Result
 
 Reading an unknown name throws, so a typo cannot pass for a missing value. `offsetExists()`

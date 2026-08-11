@@ -63,6 +63,9 @@ composer phpstan
 - **A bare `--flag` yields the literal `true` sentinel**, which neither the enum
   check nor the normalizer sees. An optional-value option used bare is therefore
   `true`, not its default; the default applies only when the option is absent.
+- **`standalone` answers between phase 1 and 2**, after the command is selected:
+  the flag is `true`, everything else is its default, nothing is validated or
+  converted.
 - **`isset()` on `Result` is false for a known name with `null`**, like on an
   array; reading an unknown name throws. Consumers rely on both.
 - **`Console::detectColors()` and `detectTerminal()` are separate on purpose.** Gate

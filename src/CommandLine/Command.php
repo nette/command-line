@@ -36,11 +36,13 @@ final class Command
 	/**
 	 * Adds a flag, a named parameter without a value such as --verbose. It parses as true when used, null when not.
 	 * @param  ?string  $alias  a short name such as -v
+	 * @param  bool  $standalone  answers on its own like --help: the rest of the line is neither checked nor converted
 	 */
 	public function addFlag(
 		string $name,
 		?string $description = null,
 		?string $alias = null,
+		bool $standalone = false,
 		mixed $default = null,
 		bool $repeatable = false,
 	): Flag

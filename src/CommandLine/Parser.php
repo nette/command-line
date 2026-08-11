@@ -38,7 +38,11 @@ final class Parser
 		}
 
 		$parameters = self::listParameters($selected);
-		$values = $this->complete($parameters, $this->evaluate($parameters, $occurrences, $selected));
+		$standalone = self::findStandalone($parameters, $occurrences);
+		$values = $standalone
+			// it answers on its own: nothing else is checked, converted or demanded
+			? $this->complete($parameters, $this->evaluate($parameters, $standalone, $selected), demandArguments: false)
+			: $this->complete($parameters, $this->evaluate($parameters, $occurrences, $selected));
 
 		return new Result($selected, $values, array_keys($occurrences), $args === []);
 	}
@@ -57,6 +61,21 @@ final class Parser
 		}
 
 		return $parameters;
+	}
+
+
+	/**
+	 * @param  array<string, Parameter>  $parameters
+	 * @param  array<string, list<mixed>>  $occurrences
+	 * @return array<string, list<mixed>>  the occurrences of the standalone flags that were used
+	 */
+	private static function findStandalone(array $parameters, array $occurrences): array
+	{
+		return array_filter(
+			$occurrences,
+			fn(array $supplied, string $name) => $parameters[$name] instanceof Flag && $parameters[$name]->standalone && end($supplied) === true,
+			ARRAY_FILTER_USE_BOTH,
+		);
 	}
 
 
@@ -186,14 +205,15 @@ final class Parser
 	 * value, so a normalizer may return null without the default value overwriting it.
 	 * @param  array<string, Parameter>  $parameters
 	 * @param  array<string, mixed>  $values
+	 * @param  bool  $demandArguments  false when a standalone flag answered instead
 	 * @return array<string, mixed>
 	 */
-	private function complete(array $parameters, array $values): array
+	private function complete(array $parameters, array $values, bool $demandArguments = true): array
 	{
 		foreach ($parameters as $name => $parameter) {
 			if (array_key_exists($name, $values)) {
 				continue;
-			} elseif ($parameter instanceof Argument && !$parameter->optional) {
+			} elseif ($demandArguments && $parameter instanceof Argument && !$parameter->optional) {
 				throw new ParseException("Missing required argument <$name>.", $parameter->command, reason: ParseError::MissingArgument, parameter: $parameter);
 			}
 

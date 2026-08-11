@@ -253,6 +253,7 @@ Tools like `git` or `composer` have commands: `git commit`, `composer install`. 
 
 ```php
 $cli = new Command('dresscode');
+$cli->addFlag('--help', 'Print this help', alias: '-h', standalone: true);
 $cli->addOption('--config', 'Configuration file', alias: '-c', normalizer: Normalizers::realPath());
 
 $check = $cli->addCommand('check', 'Report violations');
@@ -286,6 +287,28 @@ To test a single command, pass it to the parser with the whole line. The line is
 ```php
 $result = (new Parser)->parse($check, ['check', 'src', '--generate-baseline']);
 ```
+
+
+Handling --help and --version
+-----------------------------
+
+When your script has required arguments, `script.php --help` would fail with a missing argument. Mark such a flag standalone and it answers on its own:
+
+```php
+$command = new Command('convert');
+$command->addFlag('--help', alias: '-h', standalone: true);
+$command->addFlag('--version', standalone: true);
+$command->addArgument('input');  // required
+
+$args = (new Parser)->parse($command);
+
+if ($args['--help']) {
+	echo "Usage: convert [options] <input>\n";
+	exit;
+}
+```
+
+When a standalone flag is used, the parser returns it as `true` and every other parameter at its default value, without validating, converting or demanding anything. The help can therefore be printed before any configuration is read or paths are resolved. With commands, `dresscode check --help` selects `check` first, so `$args->command` is the command whose help the user asked for. The line still has to be a valid line: an unknown option is refused as usual.
 
 
 Error Handling

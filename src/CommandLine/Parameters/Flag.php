@@ -23,6 +23,8 @@ final class Flag extends Parameter
 		?string $description = null,
 		/** a short name such as -v */
 		public readonly ?string $alias = null,
+		/** answers on its own like --help: the parser returns it as true and every other parameter at its default, checking or converting nothing */
+		public readonly bool $standalone = false,
 		mixed $default = null,
 		bool $repeatable = false,
 	) {

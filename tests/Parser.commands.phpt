@@ -11,7 +11,7 @@ require __DIR__ . '/bootstrap.php';
 function app(): Command
 {
 	$cli = new Command('dresscode');
-	$cli->addFlag('--help', alias: '-h');
+	$cli->addFlag('--help', alias: '-h', standalone: true);
 	$cli->addOption('--config', alias: '-c');
 	$check = $cli->addCommand('check', 'Report violations');
 	$check->addArgument('paths', optional: true, repeatable: true);
