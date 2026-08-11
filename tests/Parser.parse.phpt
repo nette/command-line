@@ -190,6 +190,18 @@ test('a negative number is a value, unless an option has its name', function () 
 });
 
 
+test('a negatable flag', function () {
+	$command = new Command;
+	$command->addFlag('--color', alias: '-c', negatable: true);
+	Assert::same(['--color' => null], parseArgs($command, []));
+	Assert::same(['--color' => true], parseArgs($command, ['-c']));
+	Assert::same(['--color' => false], parseArgs($command, ['--no-color']));
+	Assert::same(['--color' => false], parseArgs($command, ['--color', '--no-color']));
+	Assert::exception(fn() => parseArgs($command, ['--no-color=1']), ParseException::class, 'Option --no-color does not accept a value.');
+	Assert::exception(fn() => parseArgs($command, ['--no-colr']), ParseException::class, 'Unknown option --no-colr. Did you mean --no-color?');
+});
+
+
 test('-- makes the rest positional', function () {
 	$command = new Command;
 	$command->addFlag('--verbose', alias: '-v');

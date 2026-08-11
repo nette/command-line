@@ -38,13 +38,13 @@ Everything is checked when it is added, because nothing added can change:
   is one or two dashes and a letter, digit or underscore, with no `=`, whitespace or control
   character anywhere; argument and command names start with a letter, digit or underscore and
   hold no whitespace or control character.
-- A name or an alias is unique across the ancestors and the descendants of a node
+- A name, an alias or a negation is unique across the ancestors and the descendants of a node
   (siblings may share); arguments and subcommands exclude each other on one node.
 - Required after optional, anything after a repeatable argument, and a required argument with
   a default value, judged against the arguments added before.
 
-What concerns a parameter alone, the grammar of its names and the enum, is checked by its
-constructor, so a parameter the parser could not read cannot exist;
+What concerns a parameter alone, the grammar of its names, a negation only of a long name and
+the enum, is checked by its constructor, so a parameter the parser could not read cannot exist;
 the grammar itself lives in `NameSyntax`. What involves the tree is checked by `Command`. The
 name of a command is checked by `addCommand()`, not by the constructor, which also creates the
 root and takes any name of the program.
@@ -77,6 +77,9 @@ Consequences worth knowing:
 - **After `--` a command name is a plain value**, no command is selected any more.
 - **A token that looks like a negative number is a value** unless an option of that name is
   valid at the node, so telling an option from a value needs the options of the node.
+- **The negation of a flag, `--no-name`, is a name of its own**: it is indexed beside names
+  and aliases, checked for conflicts like them, and occurs as `false`. A standalone flag
+  answers only when its last occurrence is `true`.
 - **Nothing asks `isset()` about a value while parsing**, so a normalizer may legitimately
   return `null` without the default overwriting it.
 - **`valueOptional` says only what happens when the option is present**; the default value

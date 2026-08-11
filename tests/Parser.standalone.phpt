@@ -80,3 +80,12 @@ test('it answers for the command the line runs', function () {
 		Assert::equal(['--help' => true, 'paths' => null], $result->toArray());
 	}
 });
+
+
+test('a negated standalone flag does not answer', function () {
+	$command = new Command;
+	$command->addFlag('--help', standalone: true, negatable: true);
+	$command->addArgument('input');
+	Assert::exception(fn() => parseArgs($command, ['--no-help']), ParseException::class, 'Missing required argument <input>.');
+	Assert::same(['--help' => false, 'input' => 'x'], parseArgs($command, ['--no-help', 'x']));
+});

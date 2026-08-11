@@ -88,7 +88,7 @@ final class Parser
 	private function collect(Command $root, array $args): array
 	{
 		$command = $root;
-		$names = self::indexOptions($command);
+		[$names, $negations] = self::indexOptions($command);
 		$arguments = $command->getArguments();
 		$occurrences = $extra = [];
 		$onlyPositional = false;
@@ -112,7 +112,7 @@ final class Parser
 				}
 
 				$command = $subcommand;
-				$names = self::indexOptions($command);
+				[$names, $negations] = self::indexOptions($command);
 				$arguments = $command->getArguments();
 				continue;
 
@@ -131,6 +131,15 @@ final class Parser
 			}
 
 			[$name, $value] = self::splitNameValue($arg);
+			if (isset($negations[$name])) {
+				if ($value !== self::OptionPresent) {
+					throw new ParseException("Option $name does not accept a value.", $command, reason: ParseError::UnexpectedValue, parameter: $negations[$name]);
+				}
+
+				$occurrences[$negations[$name]->name][] = false;
+				continue;
+			}
+
 			$option = $names[$name] ?? null;
 			if (!$option) {
 				if ($value === self::OptionPresent && ($bundle = self::expandBundle($name, $names)) !== null) {
@@ -139,7 +148,7 @@ final class Parser
 				}
 
 				throw new ParseException(
-					self::describeUnknownOption($name, $command, array_keys($names)),
+					self::describeUnknownOption($name, $command, [...array_keys($names), ...array_keys($negations)]),
 					$command,
 					reason: ParseError::UnknownOption,
 				);
@@ -228,22 +237,26 @@ final class Parser
 
 
 	/**
-	 * Indexes the options valid at the command by name and by alias.
-	 * @return array<string, Flag|Option>
+	 * Indexes the options valid at the command by name and by alias, and apart from them by the negation of a flag.
+	 * @return array{array<string, Flag|Option>, array<string, Flag>}
 	 */
 	private static function indexOptions(Command $command): array
 	{
-		$names = [];
+		$names = $negations = [];
 		foreach ($command->getPath() as $level) {
 			foreach ($level->getOptions() as $option) {
 				$names[$option->name] = $option;
 				if ($option->alias !== null) {
 					$names[$option->alias] = $option;
 				}
+
+				if ($option instanceof Flag && $option->negation !== null) {
+					$negations[$option->negation] = $option;
+				}
 			}
 		}
 
-		return $names;
+		return [$names, $negations];
 	}
 
 

@@ -37,18 +37,20 @@ final class Command
 	 * Adds a flag, a named parameter without a value such as --verbose. It parses as true when used, null when not.
 	 * @param  ?string  $alias  a short name such as -v
 	 * @param  bool  $standalone  answers on its own like --help: the rest of the line is neither checked nor converted
+	 * @param  bool  $negatable  --no-name turns a flag with a long name off, which parses as false
 	 */
 	public function addFlag(
 		string $name,
 		?string $description = null,
 		?string $alias = null,
 		bool $standalone = false,
+		bool $negatable = false,
 		mixed $default = null,
 		bool $repeatable = false,
 	): Flag
 	{
 		$flag = new Flag($this, ...func_get_args());
-		$this->assertNamesAvailable([$flag->name, $flag->alias]);
+		$this->assertNamesAvailable([$flag->name, $flag->alias, $flag->negation]);
 		return $this->items[] = $flag;
 	}
 
@@ -232,8 +234,8 @@ final class Command
 
 
 	/**
-	 * Refuses names or aliases taken by an option of this command, of a command above it or of a command below it.
-	 * Commands beside it may reuse them.
+	 * Refuses names, aliases or negations taken by an option of this command, of a command above it or of a command
+	 * below it. Commands beside it may reuse them.
 	 * @param  list<?string>  $names
 	 */
 	private function assertNamesAvailable(array $names): void

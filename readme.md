@@ -79,6 +79,15 @@ $command->addFlag('--verbose', alias: '-v');
 // (not used) → null
 ```
 
+`negatable: true` lets a flag with a long name be turned off: `--no-color` parses as `false`. Together with a default value, a flag that is on by default can be switched off:
+
+```php
+$command->addFlag('--color', negatable: true, default: true);
+// --color     → true
+// --no-color  → false
+// (not used)  → true
+```
+
 **Options** accept values, like `--output file.txt`. The value can be separated by a space or by `=`:
 
 ```php
