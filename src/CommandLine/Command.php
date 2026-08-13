@@ -29,6 +29,8 @@ final class Command
 	public function __construct(
 		public readonly ?string $name = null,
 		public readonly ?string $description = null,
+		/** the command line has to name one of the commands below, unless a standalone flag answers */
+		public readonly bool $commandRequired = false,
 	) {
 	}
 
@@ -116,8 +118,13 @@ final class Command
 
 	/**
 	 * Adds a command such as check in "tool check src". It inherits the options of this command.
+	 * @param  bool  $commandRequired  the command line has to name one of the commands below, unless a standalone flag answers
 	 */
-	public function addCommand(string $name, ?string $description = null): self
+	public function addCommand(
+		string $name,
+		?string $description = null,
+		bool $commandRequired = false,
+	): self
 	{
 		NameSyntax::assertWordName($name, 'Command');
 		if ($this->getArguments()) {

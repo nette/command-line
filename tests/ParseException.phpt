@@ -51,4 +51,9 @@ test('commands', function () {
 
 	$e = Assert::exception(fn() => (new Parser)->parse($check, ['fix']), ParseException::class);
 	Assert::same(ParseError::CommandMismatch, $e->reason);
+
+	$required = new Command('tool', commandRequired: true);
+	$required->addCommand('check');
+	$e = Assert::exception(fn() => (new Parser)->parse($required, []), ParseException::class, 'Missing command.');
+	Assert::same(ParseError::MissingCommand, $e->reason);
 });

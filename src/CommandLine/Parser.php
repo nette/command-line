@@ -39,6 +39,10 @@ final class Parser
 
 		$parameters = self::listParameters($selected);
 		$standalone = self::findStandalone($parameters, $occurrences);
+		if (!$standalone && $selected->commandRequired && $selected->getCommands()) {
+			throw new ParseException('Missing command.', $selected, reason: ParseError::MissingCommand);
+		}
+
 		$values = $standalone
 			// it answers on its own: nothing else is checked, converted or demanded
 			? $this->complete($parameters, $this->evaluate($parameters, $standalone, $selected), demandArguments: false)

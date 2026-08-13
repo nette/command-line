@@ -80,6 +80,8 @@ Consequences worth knowing:
 - **The negation of a flag, `--no-name`, is a name of its own**: it is indexed beside names
   and aliases, checked for conflicts like them, and occurs as `false`. A standalone flag
   answers only when its last occurrence is `true`.
+- **A required command is demanded after the standalone flags are found**, so `--help` still
+  answers a line that names no command.
 - **Nothing asks `isset()` about a value while parsing**, so a normalizer may legitimately
   return `null` without the default overwriting it.
 - **`valueOptional` says only what happens when the option is present**; the default value

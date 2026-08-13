@@ -8,9 +8,9 @@ use Tester\Assert;
 require __DIR__ . '/bootstrap.php';
 
 
-function app(): Command
+function app(bool $commandRequired = false): Command
 {
-	$cli = new Command('dresscode');
+	$cli = new Command('dresscode', commandRequired: $commandRequired);
 	$cli->addFlag('--help', alias: '-h', standalone: true);
 	$cli->addOption('--config', alias: '-c');
 	$check = $cli->addCommand('check', 'Report violations');
@@ -119,4 +119,20 @@ test('commands nest', function () {
 
 test('after the separator a command name is only a value', function () {
 	Assert::exception(fn() => (new Parser)->parse(app(), ['--', 'check']), ParseException::class, 'Unexpected argument check.');
+});
+
+
+test('a command can be required, a standalone flag still answers', function () {
+	Assert::false(app()->commandRequired);
+	$cli = app(commandRequired: true);
+	Assert::true($cli->commandRequired);
+
+	$e = Assert::exception(fn() => (new Parser)->parse($cli, ['-c', 'x.neon']), ParseException::class, 'Missing command.');
+	Assert::same($cli, $e->command);
+	Assert::same($cli->getCommand('check'), (new Parser)->parse($cli, ['check'])->command);
+	Assert::true((new Parser)->parse($cli, ['--help'])['--help']);
+
+	$remote = $cli->addCommand('remote', commandRequired: true);
+	$remote->addCommand('add');
+	Assert::exception(fn() => (new Parser)->parse($cli, ['remote']), ParseException::class, 'Missing command.');
 });

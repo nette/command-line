@@ -275,7 +275,7 @@ $explain->addArgument('rule', 'Name of the rule');
 $result = (new Parser)->parse($cli);
 ```
 
-The first positional token picks the command, and `$result->command` tells you which one it was. When the line names no command, it is the program itself. The natural way to dispatch is `match`:
+The first positional token picks the command, and `$result->command` tells you which one it was. When the line names no command, it is the program itself, unless you create it with `commandRequired: true`, in `new Command()` or in `addCommand()`, which refuses such a line. The natural way to dispatch is `match`:
 
 ```php
 exit(match ($result->command) {
@@ -349,6 +349,7 @@ Common error messages:
 | `Unexpected arguments b, c.` | Extra positional arguments |
 | `Option --format: expects json or xml, 'yaml' given.` | Value not in the enum |
 | `Unknown command 'chekc'. Did you mean 'check'?` | Unrecognized command |
+| `Missing command.` | A command is required, but none was given |
 | `Option --generate-baseline belongs to command 'check'.` | Option of another command |
 
 Errors in the definition itself, such as an option name without a dash, a name used twice or a required argument after an optional one, are programming errors and throw `\InvalidArgumentException` or `\LogicException`.

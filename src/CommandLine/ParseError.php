@@ -15,6 +15,7 @@ enum ParseError
 {
 	case UnknownOption;
 	case UnknownCommand;
+	case MissingCommand;
 	case MissingValue;
 	case UnexpectedValue;
 	case MissingArgument;
