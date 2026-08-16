@@ -8,3 +8,5 @@ if (@!include __DIR__ . '/../vendor/autoload.php') { // @ dependencies may not b
 // configure environment
 Tester\Environment::setup();
 Tester\Environment::setupFunctions();
+
+require __DIR__ . '/helpers.php';
