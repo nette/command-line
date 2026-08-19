@@ -47,7 +47,8 @@ final class Console
 
 
 	/**
-	 * Writes the text as it is, in the color when one is given.
+	 * Writes the text as it is, in the color when one is given. What comes from elsewhere and may carry colors this
+	 * console must not pass on is filtered by the caller with Ansi::strip().
 	 */
 	public function write(string $text, ?string $color = null): void
 	{

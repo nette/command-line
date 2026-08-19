@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use Nette\CommandLine\{ColorDepth, Console};
+use Nette\CommandLine\{Ansi, ColorDepth, Console};
 use Tester\Assert;
 
 require __DIR__ . '/bootstrap.php';
@@ -47,6 +47,16 @@ test('the text is written as it is, so what is data stays data', function () {
 		rewind($stream);
 		Assert::same("<?php \$s = \"\e[91m\";\n", stream_get_contents($stream));
 	}
+});
+
+
+test('a text from elsewhere is filtered by the caller, not by the console', function () {
+	$stream = fopen('php://memory', 'w+');
+	$console = new Console($stream, colorDepth: ColorDepth::None);
+	$fromSubprocess = "\e[91mred\e[0m plain\n";
+	$console->write($console->hasColors() ? $fromSubprocess : Ansi::strip($fromSubprocess));
+	rewind($stream);
+	Assert::same("red plain\n", stream_get_contents($stream));
 });
 
 
