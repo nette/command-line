@@ -20,6 +20,7 @@ final class Console
 	private $stream;
 	private ColorDepth $colorDepth;
 	private readonly bool $terminal;
+	private ?int $measuredWidth = null;
 
 
 	/**
@@ -120,6 +121,24 @@ final class Console
 
 
 	/**
+	 * Returns the width of the terminal in columns, or 80 when the stream is not one. COLUMNS holding a positive
+	 * integer wins and is read every time, so a narrow terminal can be simulated; the terminal is asked once per
+	 * console, so a resized one needs COLUMNS or a new console.
+	 */
+	public function getWidth(): int
+	{
+		$columns = (string) getenv('COLUMNS');
+		if (preg_match('#^[1-9]\d*$#D', $columns)) {
+			return (int) $columns;
+		} elseif (!$this->terminal) {
+			return 80;
+		}
+
+		return $this->measuredWidth ??= self::measureTerminalWidth();
+	}
+
+
+	/**
 	 * @param  resource  $stream
 	 */
 	private static function detectTerminal($stream): bool
@@ -158,6 +177,29 @@ final class Console
 			default => ColorDepth::Ansi16, // true, yes
 		};
 		return $forced->value > $detected->value ? $forced : $detected;
+	}
+
+
+	private static function measureTerminalWidth(): int
+	{
+		if (!function_exists('exec')) { // disabled in the configuration of PHP
+			return 80;
+		} elseif (PHP_OS_FAMILY !== 'Windows') {
+			// the terminal of the process, which exec() would not see through a redirected stdin
+			$size = (string) @exec('stty size 2>/dev/null </dev/tty');
+			return preg_match('#^\d+ ([1-9]\d*)$#D', trim($size), $m) ? (int) $m[1] : 80;
+		}
+
+		$lines = [];
+		@exec('mode con 2>NUL', $lines);
+		$values = [];
+		foreach ($lines as $line) {
+			if (preg_match('#:\s+(\d+)\s*$#', $line, $m)) {
+				$values[] = (int) $m[1];
+			}
+		}
+
+		return $values[1] ?? 80; // second numeric value is columns (locale-independent)
 	}
 
 
