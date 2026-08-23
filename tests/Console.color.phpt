@@ -5,8 +5,7 @@ use Tester\Assert;
 
 require __DIR__ . '/bootstrap.php';
 
-$console = new Console;
-$console->useColors();
+$console = new Console(colors: true);
 
 Assert::same("\x1b[m", $console->color(null));
 Assert::same("\x1b[1;31m", $console->color('red'));

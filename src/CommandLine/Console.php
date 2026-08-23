@@ -11,22 +11,42 @@ use const PHP_SAPI;
 
 
 /**
- * Stupid console writer.
+ * Writes to a stream, in color where the stream takes it.
  */
-class Console
+final class Console
 {
-	private bool $useColors;
+	/** @var resource */
+	private $stream;
+	private bool $colors;
+	private readonly bool $terminal;
 
 
-	public function __construct()
+	/**
+	 * @param  ?resource  $stream  where the output goes; STDOUT by default
+	 * @param  ?bool  $colors  null asks the stream and honors NO_COLOR and FORCE_COLOR
+	 * @param  ?bool  $terminal  null asks the stream; a test over a memory stream passes true
+	 */
+	public function __construct($stream = null, ?bool $colors = null, ?bool $terminal = null)
 	{
-		$this->useColors = self::detectColors();
+		$this->stream = $stream ?? STDOUT;
+		$this->terminal = $terminal ?? self::detectTerminal($this->stream);
+		$this->useColors($colors ?? self::detectColors($this->terminal));
 	}
 
 
-	public function useColors(bool $state = true): void
+	/**
+	 * Writes the text as it is. What comes from elsewhere and may carry colors this console must not
+	 * pass on is filtered by the caller with Ansi::strip().
+	 */
+	public function write(string $text): void
 	{
-		$this->useColors = $state;
+		fwrite($this->stream, $text);
+	}
+
+
+	public function writeLine(string $text = ''): void
+	{
+		$this->write($text . "\n");
 	}
 
 
@@ -46,7 +66,7 @@ class Console
 			'purple' => '0;35', 'fuchsia' => '1;35', 'olive' => '0;33', 'yellow' => '1;33',
 			'' => '0',
 		];
-		if ($this->useColors) {
+		if ($this->colors) {
 			$c = explode('/', $color ?: '/');
 			return "\033["
 				. ($c[0] ? $colors[$c[0]] : '')
@@ -59,27 +79,47 @@ class Console
 	}
 
 
+	public function useColors(bool $state): void
+	{
+		$this->colors = $state;
+	}
+
+
+	public function hasColors(): bool
+	{
+		return $this->colors;
+	}
+
+
+	/**
+	 * Tells whether the output is an interactive terminal, which is what a progress bar or a prompt asks:
+	 * a user may turn colors off and still sit at a real terminal.
+	 */
+	public function isTerminal(): bool
+	{
+		return $this->terminal;
+	}
+
+
+	/**
+	 * @param  resource  $stream
+	 */
+	private static function detectTerminal($stream): bool
+	{
+		return (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg')
+			&& @stream_isatty($stream); // @ may trigger error 'cannot cast a filtered stream on this system'
+	}
+
+
 	/**
 	 * Detects whether the terminal supports ANSI colors.
 	 * Returns false when NO_COLOR is set, or when not running in a CLI TTY.
 	 * FORCE_COLOR overrides the TTY check.
 	 */
-	public static function detectColors(): bool
+	private static function detectColors(bool $terminal): bool
 	{
 		return (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg')
 			&& getenv('NO_COLOR') === false // https://no-color.org
-			&& (getenv('FORCE_COLOR') || self::detectTerminal());
-	}
-
-
-	/**
-	 * Detects whether the output is an interactive terminal.
-	 * Useful for auto-disabling features that only make sense in a TTY
-	 * (progress indicators, line-rewriting output, interactive prompts).
-	 */
-	public static function detectTerminal(): bool
-	{
-		return (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg')
-			&& @stream_isatty(STDOUT); // @ may trigger error 'cannot cast a filtered stream on this system'
+			&& (getenv('FORCE_COLOR') || $terminal);
 	}
 }

@@ -11,17 +11,17 @@ public manual is distilled.
 
 Small classes, mostly clear from signatures; the value is a handful of traps - the
 three phases of `parse()` with the command selection and the sentinel, `isset()` on
-`Result`, and the two terminal checks. Read
+`Result`, and the two questions a console answers about its stream. Read
 `docs/internals.md` before editing them.
 
 ## Project Overview
 
 **Nette Command Line** is a tiny, zero-dependency library. `Command` defines a
 command line as a tree of the program and its commands, `Parser` reads a command
-line against it and returns a `Result`, `Console` colors the output and `Ansi`
-measures text the way a terminal shows it. The parameters live in the
-`Parameters` namespace: `Flag` extends `Parameter`, while
-`Option` and `Argument` extend it through `ValueParameter`.
+line against it and returns a `Result`, `Console` writes to a stream in color and
+`Ansi` measures text the way a terminal shows it. The parameters live in the
+`Parameters` namespace: `Flag` extends `Parameter`, while `Option` and `Argument`
+extend it through `ValueParameter`.
 
 - **PHP Version**: 8.2 - 8.5
 - **Package**: `nette/command-line`
@@ -69,9 +69,10 @@ composer phpstan
   converted.
 - **`isset()` on `Result` is false for a known name with `null`**, like on an
   array; reading an unknown name throws. Consumers rely on both.
-- **`Console::detectColors()` and `detectTerminal()` are separate on purpose.** Gate
-  *color* on `detectColors` (honors `NO_COLOR`/`FORCE_COLOR`), but gate
-  *interactive-only* features (progress bars, prompts) on `detectTerminal` (pure TTY)
-  - a user may disable color yet still be on a real terminal.
+- **A `Console` is one stream**, and its colors and terminal follow that stream;
+  an application writing to stdout and stderr makes one for each. `hasColors()` and
+  `isTerminal()` are separate on purpose: gate *color* on the first (it honors
+  `NO_COLOR`/`FORCE_COLOR`), *interactive-only* features (a progress bar, a prompt) on the
+  second, since a user may disable color yet still be on a real terminal.
 - User-facing how-to (`addFlag`/`addOption`/`addArgument` and their settings, the help-text
   format, color codes) is manual material and lives in the public web docs, not here.

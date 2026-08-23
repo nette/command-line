@@ -331,7 +331,8 @@ use Nette\CommandLine\ParseException;
 try {
 	$result = (new Parser)->parse($cli);
 } catch (ParseException $e) {
-	fwrite(STDERR, "Error: {$e->getMessage()}\n");
+	$stderr = new Console(STDERR);
+	$stderr->writeLine("Error: {$e->getMessage()}");
 	exit(2);
 }
 ```
@@ -358,17 +359,31 @@ Errors in the definition itself, such as an option name without a dash, a name u
 Colorful Output
 ===============
 
-`Console` wraps text in ANSI color codes so your output stands out:
+`Console` writes to one stream and colors the text when that stream takes it:
 
 ```php
 $console = new Console;
-echo $console->color('red', 'Error!') . "\n";
-echo $console->color('white/blue', 'White text on blue background') . "\n";
+$console->writeLine($console->color('red', 'Error!'));
+$console->writeLine($console->color('white/blue', 'White text on blue background'));
 ```
 
-The color is `'foreground'` or `'foreground/background'`, one of `black`, `gray`, `silver`, `white`, `navy`, `blue`, `green`, `lime`, `teal`, `aqua`, `maroon`, `red`, `purple`, `fuchsia`, `olive` and `yellow`. Colors are used only when the output supports them (`useColors()` overrides that); otherwise `color()` returns the plain string.
+The console writes to `STDOUT` unless you give it another stream. An application that writes to both wants one console for each, so that a redirected output does not decide the colors of the other: `$out = new Console(STDOUT)` and `$err = new Console(STDERR)`.
 
-`Console::detectColors()` honors the [NO_COLOR](https://no-color.org) and `FORCE_COLOR` environment variables. `Console::detectTerminal()` tells you whether the output is an interactive terminal, which is the right check for progress bars and prompts: a user may turn colors off and still sit at a real terminal.
+The color is `'foreground'` or `'foreground/background'`, one of `black`, `gray`, `silver`, `white`, `navy`, `blue`, `green`, `lime`, `teal`, `aqua`, `maroon`, `red`, `purple`, `fuchsia`, `olive` and `yellow`.
+
+Colors are used when the stream is a terminal, unless [NO_COLOR](https://no-color.org) or `FORCE_COLOR` says otherwise. Your `--no-color` option wins over both, either in the constructor or later:
+
+```php
+$console = new Console(STDOUT, colors: false);  // or $console->useColors(false);
+$console->hasColors();   // whether it colors
+$console->isTerminal();  // whether someone is watching: progress bars, prompts
+```
+
+With colors off `color()` adds none, so text you compose comes out plain by itself. Everything else `write()` passes through untouched, so the content of a file, JSON or XML is never quietly rewritten. When you print a text from elsewhere that carries colors of its own, such as the output of a subprocess, drop them yourself:
+
+```php
+$console->write($console->hasColors() ? $output : Ansi::strip($output));
+```
 
 `Ansi` measures and cuts text the way the terminal shows it: an escape sequence takes no column, a wide character (CJK, emoji) two. Use it wherever a column has to line up:
 

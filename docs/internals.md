@@ -9,7 +9,7 @@ layer, the facts that are expensive to rediscover.
   commands. It knows nothing of `argv`, the environment or the output.
 - **`Parser`** reads a command line against the tree and returns an immutable `Result`.
   It holds no state.
-- **`Console`** colors the output and knows no `Command`.
+- **`Console`** writes to a stream and knows no `Command`.
 
 The parameters live in the `Parameters` namespace and split by **whether they take a value**,
 the axis most settings follow. `Flag` takes none; `ValueParameter` holds the enum, the
@@ -128,13 +128,20 @@ known" would silently make every such test true. The selected command is a prope
 a reserved key among the values. Presence survives into the result: `wasProvided()` answers
 from the occurrences, never from the value.
 
-## Console: two distinct terminal checks
+## Console: one stream, two questions about it
 
-`detectColors()` and `detectTerminal()` are **separate on purpose**. `detectTerminal` is the
-pure CLI and TTY check; `detectColors` builds on it and adds `NO_COLOR` (disables) and
-`FORCE_COLOR` (overrides the TTY check). Gate **color** on `detectColors`, but gate
-**interactive-only features** (progress bars, line rewriting, prompts) on `detectTerminal`,
-because a user may set `NO_COLOR` and still be on a real terminal.
+A console is **one stream** and everything it knows follows from that stream, so an application
+writing to stdout and stderr makes one for each; a redirected stdout then cannot decide the
+colors of stderr. Both answers can be given to the constructor, which is what an application
+does for `--no-color` and a test for a memory stream.
 
-`color($color)` with the string omitted emits the escape code with **no reset**; it is the
-null *string* that skips the reset, not a null color.
+`hasColors()` and `isTerminal()` are **two questions, not one**. Colors follow the terminal but
+`NO_COLOR` (disables) and `FORCE_COLOR` (decides whatever the stream is) override it, so gate
+*color* on the first and *interactive-only features* (a progress bar, line rewriting, a prompt) on
+the second: a user may set `NO_COLOR` and still be on a real terminal.
+
+- **The console writes what it is given.** `color()` is the only place that adds a sequence, and
+  with colors off it adds none, so composed text comes out plain by itself. `write()` rewrites
+  nothing, because it cannot tell text from the content of a file, and stripping the one would
+  silently corrupt the other. A caller printing a text from elsewhere (the output of a
+  subprocess) drops its colors with `Ansi::strip()`, which is the rare case and the visible one.
