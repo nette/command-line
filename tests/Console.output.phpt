@@ -49,3 +49,30 @@ test('a stream that is not a terminal gets no colors', function () {
 	Assert::false($console->hasColors());
 	Assert::same('plain', $console->color('red', 'plain'));
 });
+
+
+test('COLUMNS wins and is read every time', function () {
+	putenv('COLUMNS=42');
+	Assert::same(42, (new Console)->getWidth());
+	Assert::same(42, (new Console(fopen('php://memory', 'w+')))->getWidth());
+	putenv('COLUMNS=17');
+	Assert::same(17, (new Console)->getWidth());
+	putenv('COLUMNS');
+	Assert::same(80, (new Console)->getWidth()); // the tests are piped, so no terminal to ask
+});
+
+
+test('a console over a stream that is not a terminal is 80 columns wide', function () {
+	putenv('COLUMNS');
+	Assert::same(80, (new Console(fopen('php://memory', 'w+')))->getWidth());
+});
+
+
+test('COLUMNS counts only when it is a positive integer', function () {
+	foreach (['-1', 'abc', '10x', '0', ' 42'] as $invalid) {
+		putenv("COLUMNS=$invalid");
+		Assert::same(80, (new Console)->getWidth(), $invalid);
+	}
+
+	putenv('COLUMNS');
+});

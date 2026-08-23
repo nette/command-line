@@ -7,7 +7,8 @@
 
 namespace Nette\CommandLine;
 
-use const PHP_SAPI;
+use function function_exists;
+use const PHP_OS_FAMILY, PHP_SAPI;
 
 
 /**
@@ -19,6 +20,7 @@ final class Console
 	private $stream;
 	private bool $colors;
 	private readonly bool $terminal;
+	private static ?int $measuredWidth = null;
 
 
 	/**
@@ -102,6 +104,23 @@ final class Console
 
 
 	/**
+	 * Returns the width of the terminal in columns, or 80 when the stream is not one. COLUMNS holding a positive
+	 * integer wins and is read every time, so a narrow terminal can be simulated; the terminal is asked only once.
+	 */
+	public function getWidth(): int
+	{
+		$columns = (string) getenv('COLUMNS');
+		if (preg_match('#^[1-9]\d*$#D', $columns)) {
+			return (int) $columns;
+		} elseif (!$this->terminal) {
+			return 80;
+		}
+
+		return self::$measuredWidth ??= self::measureTerminalWidth();
+	}
+
+
+	/**
 	 * @param  resource  $stream
 	 */
 	private static function detectTerminal($stream): bool
@@ -121,5 +140,26 @@ final class Console
 		return (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg')
 			&& getenv('NO_COLOR') === false // https://no-color.org
 			&& (getenv('FORCE_COLOR') || $terminal);
+	}
+
+
+	private static function measureTerminalWidth(): int
+	{
+		if (!function_exists('exec')) { // disabled in the configuration of PHP
+			return 80;
+		} elseif (PHP_OS_FAMILY !== 'Windows') {
+			return (int) @exec('tput cols 2>/dev/null') ?: 80;
+		}
+
+		$lines = [];
+		@exec('mode con 2>NUL', $lines);
+		$values = [];
+		foreach ($lines as $line) {
+			if (preg_match('#:\s+(\d+)\s*$#', $line, $m)) {
+				$values[] = (int) $m[1];
+			}
+		}
+
+		return $values[1] ?? 80; // second numeric value is columns (locale-independent)
 	}
 }

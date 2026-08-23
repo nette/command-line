@@ -69,7 +69,7 @@ composer phpstan
   converted.
 - **`isset()` on `Result` is false for a known name with `null`**, like on an
   array; reading an unknown name throws. Consumers rely on both.
-- **A `Console` is one stream**, and its colors and terminal follow that stream;
+- **A `Console` is one stream**, and its colors, width and terminal follow that stream;
   an application writing to stdout and stderr makes one for each. `hasColors()` and
   `isTerminal()` are separate on purpose: gate *color* on the first (it honors
   `NO_COLOR`/`FORCE_COLOR`), *interactive-only* features (a progress bar, a prompt) on the

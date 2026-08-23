@@ -377,6 +377,7 @@ Colors are used when the stream is a terminal, unless [NO_COLOR](https://no-colo
 $console = new Console(STDOUT, colors: false);  // or $console->useColors(false);
 $console->hasColors();   // whether it colors
 $console->isTerminal();  // whether someone is watching: progress bars, prompts
+$console->getWidth();    // columns of the terminal, 80 when it is not one
 ```
 
 With colors off `color()` adds none, so text you compose comes out plain by itself. Everything else `write()` passes through untouched, so the content of a file, JSON or XML is never quietly rewritten. When you print a text from elsewhere that carries colors of its own, such as the output of a subprocess, drop them yourself:
