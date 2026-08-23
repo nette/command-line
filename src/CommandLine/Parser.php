@@ -1,0 +1,288 @@
+<?php declare(strict_types=1);
+
+/**
+ * This file is part of the Nette Framework (https://nette.org)
+ * Copyright (c) 2004 David Grudl (https://davidgrudl.com)
+ */
+
+namespace Nette\CommandLine;
+
+use Nette\CommandLine\Parameters\{Argument, Flag, Option, Parameter, ValueParameter};
+use function array_key_exists, count, is_array;
+
+
+/**
+ * Reads a command line according to the definition of a command.
+ */
+final class Parser
+{
+	private const OptionPresent = true;
+
+
+	/**
+	 * Parses the command line, which is the one of the running process unless given.
+	 * @param  ?list<string>  $argv  the tokens without the name of the program
+	 */
+	public function parse(Command $command, ?array $argv = null): ParseResult
+	{
+		$argv ??= array_values(array_map(strval(...), array_slice((array) ($_SERVER['argv'] ?? []), 1)));
+		$occurrences = $this->collect($command, $argv);
+		$parameters = self::listParameters($command);
+		$values = $this->complete($parameters, $this->evaluate($parameters, $occurrences, $command));
+		return new ParseResult($command, $values, array_fill_keys(array_keys($occurrences), true), $argv === []);
+	}
+
+
+	/**
+	 * @return array<string, Parameter>  the parameters of the command
+	 */
+	private static function listParameters(Command $command): array
+	{
+		$parameters = [];
+		foreach ($command->getParameters() as $parameter) {
+			$parameters[$parameter->name] = $parameter;
+		}
+
+		return $parameters;
+	}
+
+
+	/**
+	 * Phase 1: reads the tokens into raw occurrences per parameter, resolving aliases. An option used without a value
+	 * yields the OptionPresent sentinel.
+	 * @param  list<string>  $argv
+	 * @return array<string, list<mixed>>  the occurrences
+	 */
+	private function collect(Command $command, array $argv): array
+	{
+		[$names, $negations] = self::indexOptions($command);
+		$arguments = $command->getArguments();
+		$occurrences = $extra = [];
+		$onlyPositional = false;
+
+		$i = 0;
+		while ($i < count($argv)) {
+			$arg = $argv[$i++];
+			if (!$onlyPositional && $arg === '--') { // everything after -- is positional
+				$onlyPositional = true;
+				continue;
+
+			} elseif ($onlyPositional || !self::isOption($arg)) {
+				$argument = current($arguments);
+				if (!$argument) {
+					$extra[] = $arg;
+				} else {
+					$occurrences[$argument->name][] = $arg;
+					if (!$argument->repeatable) { // a repeatable argument consumes all remaining values
+						next($arguments);
+					}
+				}
+
+				continue;
+			}
+
+			[$name, $value] = self::splitNameValue($arg);
+			if (isset($negations[$name])) {
+				if ($value !== self::OptionPresent) {
+					throw new ParseException(
+						'Option ' . HelpRenderer::formatCode($name) . ' does not accept a value.',
+						$command,
+						reason: ParseFailure::UnexpectedValue,
+						parameter: $negations[$name],
+						token: $name,
+					);
+				}
+
+				$occurrences[$negations[$name]->name][] = false;
+				continue;
+			}
+
+			$option = $names[$name] ?? null;
+			if (!$option) {
+				throw new ParseException(
+					'Unknown option ' . HelpRenderer::formatCode($name) . '.',
+					$command,
+					reason: ParseFailure::UnknownOption,
+					token: $name,
+				);
+			}
+
+			if ($value !== self::OptionPresent && $option instanceof Flag) {
+				throw new ParseException(
+					'Option ' . HelpRenderer::formatCode($option->name) . ' does not accept a value.',
+					$command,
+					reason: ParseFailure::UnexpectedValue,
+					parameter: $option,
+					token: $name,
+				);
+
+			} elseif ($value === self::OptionPresent && $option instanceof Option) {
+				$next = isset($argv[$i]) && !self::isOption($argv[$i]) ? $argv[$i] : null;
+				if (!$option->valueOptional) {
+					$value = $next ?? throw new ParseException(
+						'Option ' . HelpRenderer::formatCode($option->name) . ' requires a value.',
+						$command,
+						reason: ParseFailure::MissingValue,
+						parameter: $option,
+						token: $name,
+					);
+					$i++;
+
+				} elseif ($next !== null && in_array($next, $option->enum ?? [], true)) {
+					// an optional value is attached with =, unless the next token is one of the enum values
+					$value = $argv[$i++];
+				}
+			}
+
+			$occurrences[$option->name][] = $value;
+		}
+
+		if ($extra) {
+			$list = implode(', ', array_map(HelpRenderer::formatCode(...), $extra));
+			throw new ParseException(
+				count($extra) === 1 ? "Unexpected argument $list." : "Unexpected arguments $list.",
+				$command,
+				reason: ParseFailure::UnexpectedArgument,
+				token: $extra[0],
+			);
+		}
+
+		return $occurrences;
+	}
+
+
+	/**
+	 * Phase 2: checks and converts the values that were actually supplied. Only the last value of a parameter that
+	 * is not repeatable counts, so the earlier ones are neither checked nor converted.
+	 * @param  array<string, Parameter>  $parameters
+	 * @param  array<string, list<mixed>>  $occurrences
+	 * @return array<string, mixed>
+	 */
+	private function evaluate(array $parameters, array $occurrences, Command $command): array
+	{
+		$values = [];
+		foreach ($occurrences as $name => $supplied) {
+			$parameter = $parameters[$name];
+			$supplied = $parameter->repeatable ? $supplied : [end($supplied)];
+			if ($parameter instanceof ValueParameter) {
+				$supplied = array_map(fn($value) => $this->normalizeValue($parameter, $value, $command), $supplied);
+			}
+
+			$values[$name] = $parameter->repeatable ? $supplied : $supplied[0];
+		}
+
+		return $values;
+	}
+
+
+	/**
+	 * Phase 3: fills in what did not occur. Presence is decided by the occurrences, not by the
+	 * value, so a normalizer may return null without the default value overwriting it.
+	 * @param  array<string, Parameter>  $parameters
+	 * @param  array<string, mixed>  $values
+	 * @return array<string, mixed>
+	 */
+	private function complete(array $parameters, array $values): array
+	{
+		foreach ($parameters as $name => $parameter) {
+			if (array_key_exists($name, $values)) {
+				continue;
+			} elseif ($parameter instanceof Argument && !$parameter->optional) {
+				throw new ParseException(
+					'Missing required argument ' . HelpRenderer::formatCode("<$name>") . '.',
+					$parameter->command,
+					reason: ParseFailure::MissingArgument,
+					parameter: $parameter,
+				);
+			}
+
+			$default = $parameter->default;
+			$values[$name] = $parameter->repeatable && !is_array($default)
+				? ($default === null ? [] : [$default])
+				: $default;
+		}
+
+		return $values;
+	}
+
+
+	/**
+	 * Indexes the options of the command by name and by alias, and apart from them by the negation of a flag.
+	 * @return array{array<string, Flag|Option>, array<string, Flag>}
+	 */
+	private static function indexOptions(Command $command): array
+	{
+		$names = $negations = [];
+		foreach ($command->getOptions() as $option) {
+			$names[$option->name] = $option;
+			if ($option->alias !== null) {
+				$names[$option->alias] = $option;
+			}
+
+			if ($option instanceof Flag && $option->negation !== null) {
+				$negations[$option->negation] = $option;
+			}
+		}
+
+		return [$names, $negations];
+	}
+
+
+	private function normalizeValue(ValueParameter $parameter, string|true $value, Command $command): mixed
+	{
+		if ($value === self::OptionPresent) {
+			// option used without a value (optional value) - keep the `true` sentinel untouched
+			return true;
+		}
+
+		// a bad value is reported by throwing; an \Error means the normalizer itself is broken
+		try {
+			return $parameter->normalize($value);
+		} catch (ParseException $e) {
+			throw $e;
+		} catch (\Exception $e) { // dresscode:ignore correctness.exceptionWhereThrowableBelongs
+			$label = $parameter instanceof Option
+				? 'Option ' . HelpRenderer::formatCode($parameter->name)
+				: 'Argument ' . HelpRenderer::formatCode("<$parameter->name>");
+			throw new ParseException(
+				"$label: " . self::escape($e->getMessage()),
+				$command,
+				$e,
+				ParseFailure::InvalidValue,
+				$parameter,
+				$value,
+			);
+		}
+	}
+
+
+	/**
+	 * Returns true if the token looks like an option, not a positional value. A lone "-" is a value by convention,
+	 * usually meaning stdin or stdout.
+	 */
+	private static function isOption(string $arg): bool
+	{
+		return $arg !== '' && $arg !== '-' && $arg[0] === '-';
+	}
+
+
+	/**
+	 * Splits a "--name=value" token into [name, value]; a bare "--name" yields the OptionPresent sentinel as value.
+	 * @return array{string, string|true}
+	 */
+	private static function splitNameValue(string $arg): array
+	{
+		return ($eq = strpos($arg, '=')) !== false
+			? [substr($arg, 0, $eq), substr($arg, $eq + 1)]
+			: [$arg, self::OptionPresent];
+	}
+
+
+	/**
+	 * Makes a text from the command line safe to show in a message, with control characters as escape sequences.
+	 */
+	private static function escape(string $s): string
+	{
+		return addcslashes($s, "\0..\37\177");
+	}
+}

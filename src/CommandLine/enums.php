@@ -18,3 +18,17 @@ enum ColorDepth: int
 	case Ansi256 = 2;
 	case TrueColor = 3;
 }
+
+
+/**
+ * What was wrong with the command line.
+ */
+enum ParseFailure
+{
+	case UnknownOption;
+	case MissingValue;
+	case UnexpectedValue;
+	case MissingArgument;
+	case UnexpectedArgument;
+	case InvalidValue;
+}
