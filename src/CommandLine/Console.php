@@ -7,12 +7,13 @@
 
 namespace Nette\CommandLine;
 
-use function count, function_exists, in_array;
+use function count, function_exists, in_array, is_resource;
 use const PHP_OS_FAMILY, PHP_SAPI;
 
 
 /**
- * Writes to a stream, in color where the stream takes it.
+ * Writes to a stream, in color where the stream takes it, and keeps a status of lines drawn in place,
+ * which the next output replaces.
  */
 final class Console
 {
@@ -20,6 +21,13 @@ final class Console
 	private $stream;
 	private ColorDepth $colorDepth;
 	private readonly bool $terminal;
+
+	/** a status is drawn and the cursor stands at its first line */
+	private bool $statusShown = false;
+	private bool $restoresCursor = false;
+
+	/** the cursor stands at the beginning of a line, so a status may be drawn without erasing one */
+	private bool $atLineStart = true;
 	private ?int $measuredWidth = null;
 
 
@@ -42,18 +50,31 @@ final class Console
 			&& function_exists('sapi_windows_vt100_support')
 			&& @stream_isatty($this->stream) // @ may trigger error 'cannot cast a filtered stream on this system'
 		) {
-			sapi_windows_vt100_support($this->stream, true);
+			sapi_windows_vt100_support($this->stream, true); // a status needs it as much as colors do
 		}
 	}
 
 
 	/**
-	 * Writes the text as it is, in the color when one is given. What comes from elsewhere and may carry colors this
-	 * console must not pass on is filtered by the caller with Ansi::strip().
+	 * A status lives as long as its console, so a console let go does not leave the cursor hidden.
+	 */
+	public function __destruct()
+	{
+		$this->clearStatus();
+	}
+
+
+	/**
+	 * Writes the text as it is, in the color when one is given, and erases the status drawn before it. What comes
+	 * from elsewhere and may carry colors this console must not pass on is filtered by the caller with Ansi::strip().
 	 */
 	public function write(string $text, ?string $color = null): void
 	{
+		$this->clearStatus();
 		$this->emit($this->color($color, $text));
+		if ($text !== '') {
+			$this->atLineStart = str_ends_with($text, "\n");
+		}
 	}
 
 
@@ -139,6 +160,71 @@ final class Console
 
 
 	/**
+	 * Draws the lines in place of the ones drawn before, a progress bar or a panel; the next write() erases them and
+	 * the next setStatus() draws them below its output. A line too long is cut, since a wrapped one cannot be redrawn,
+	 * and nothing to draw erases the status. Nothing is drawn when the stream is not a terminal. A line is printable
+	 * text with colors; a tab is expanded, other control characters and moves of the cursor are the caller's risk.
+	 * @param  string|list<string>  $lines
+	 */
+	public function setStatus(string|array $lines): void
+	{
+		$text = str_replace("\r\n", "\n", implode("\n", (array) $lines));
+		if (!$this->terminal) {
+			return;
+		} elseif ($text === '') {
+			$this->clearStatus();
+			return;
+		}
+
+		$lines = explode("\n", $text);
+		$width = $this->getWidth();
+		$out = $this->statusShown
+			? "\e[J" // erase what is drawn, the cursor stands at its first line
+			: ($this->atLineStart ? '' : "\n") // a status takes whole lines, so it never erases a half-written one
+				. "\e[?25l"; // hide the cursor, which would jump around the status
+		$out .= implode("\n", array_map(fn(string $line) => Ansi::truncate(self::expandTabs($line), $width), $lines));
+
+		// back to the first line of the status, where the next write() erases from
+		$this->emit($out . "\r" . (count($lines) > 1 ? "\e[" . (count($lines) - 1) . 'A' : ''));
+		$this->statusShown = true;
+		$this->atLineStart = true;
+
+		if (!$this->restoresCursor) { // a fatal error runs no destructor, yet must not leave the cursor hidden
+			$this->restoresCursor = true;
+			$console = \WeakReference::create($this); // the shutdown function must not keep the console alive
+			register_shutdown_function(static fn() => $console->get()?->clearStatus());
+		}
+	}
+
+
+	/**
+	 * Replaces the tabs with spaces up to the stops of the terminal, every 8 columns, which a line of the status
+	 * reaches exactly, since it starts in the first one.
+	 */
+	private static function expandTabs(string $line): string
+	{
+		$out = '';
+		foreach (explode("\t", $line) as $i => $part) {
+			$out .= ($i ? str_repeat(' ', 8 - Ansi::measure($out) % 8) : '') . $part;
+		}
+
+		return $out;
+	}
+
+
+	/**
+	 * Erases the status and shows the cursor again.
+	 */
+	public function clearStatus(): void
+	{
+		if ($this->statusShown) {
+			$this->statusShown = false;
+			$this->emit("\e[J\e[?25h");
+		}
+	}
+
+
+	/**
 	 * @param  resource  $stream
 	 */
 	private static function detectTerminal($stream): bool
@@ -205,6 +291,8 @@ final class Console
 
 	private function emit(string $text): void
 	{
-		@fwrite($this->stream, $text); // @ a pipe closed by the reader (| head) is no error of the application
+		if (is_resource($this->stream)) { // a shutdown function may find the stream closed
+			@fwrite($this->stream, $text); // @ a pipe closed by the reader (| head) is no error of the application
+		}
 	}
 }
