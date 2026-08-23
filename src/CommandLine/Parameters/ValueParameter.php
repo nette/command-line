@@ -7,7 +7,7 @@
 
 namespace Nette\CommandLine\Parameters;
 
-use Nette\CommandLine\Command;
+use Nette\CommandLine\{Command, HelpRenderer};
 use function count, is_array, is_string;
 
 
@@ -76,5 +76,29 @@ abstract class ValueParameter extends Parameter
 		}
 
 		return $list;
+	}
+
+
+	/**
+	 * Checks a value given on the command line against the enum and converts it, to the case of the backed enum and
+	 * then by the normalizer. A bad value is reported by throwing an exception.
+	 */
+	public function normalize(string $value): mixed
+	{
+		if ($this->enum !== null && !in_array($value, $this->enum, true)) {
+			$enum = array_map(HelpRenderer::formatCode(...), $this->enum);
+			$last = array_pop($enum);
+			$expected = $enum ? implode(', ', $enum) . " or $last" : $last;
+			throw new \InvalidArgumentException("expects $expected, " . HelpRenderer::formatCode($value) . ' given.');
+		}
+
+		$result = $value;
+		foreach ($this->enumClass === null ? [] : $this->enumClass::cases() as $case) {
+			if ((string) $case->value === $value) {
+				$result = $case;
+			}
+		}
+
+		return $this->normalizer === null ? $result : ($this->normalizer)($result);
 	}
 }

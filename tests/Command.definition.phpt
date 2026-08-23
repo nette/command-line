@@ -366,6 +366,18 @@ test('an enum is a list of values or a backed enum', function () {
 });
 
 
+test('a value is checked and converted by its parameter, also outside the parser', function () {
+	$command = new Command;
+	$level = $command->addOption('--level', enum: Level::class, normalizer: fn(Level $level) => $level->name);
+	Assert::same('High', $level->normalize('2'));
+	Assert::exception(fn() => $level->normalize('3'), InvalidArgumentException::class, 'expects `1` or `2`, `3` given.');
+
+	$mode = $command->addArgument('mode', enum: ['fast', 'safe', 'slow']);
+	Assert::same('safe', $mode->normalize('safe'));
+	Assert::exception(fn() => $mode->normalize('x'), InvalidArgumentException::class, 'expects `fast`, `safe` or `slow`, `x` given.');
+});
+
+
 test('the rules that involve several arguments are judged when an argument is added', function () {
 	$command = new Command;
 	$command->addArgument('a', optional: true);
@@ -375,6 +387,7 @@ test('the rules that involve several arguments are judged when an argument is ad
 		"Required argument 'b' cannot follow optional argument 'a'.",
 	);
 	$command->addArgument('b', optional: true);
+	Assert::same(['a' => null, 'b' => null], parseArgs($command, []));
 
 	$command = new Command;
 	$command->addArgument('files', optional: true, repeatable: true);
