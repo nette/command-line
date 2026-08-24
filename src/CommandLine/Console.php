@@ -113,6 +113,28 @@ final class Console
 	}
 
 
+	/**
+	 * Makes the text a link to the URL, the text being the URL itself when none is given. Outside a terminal, where
+	 * nobody clicks, or without colors the text is returned followed by the URL in parentheses, or the URL alone when
+	 * it is the text, so that nothing is lost. The text is written as it is, like by write().
+	 * @throws \InvalidArgumentException  when the URL holds a control character, which could end the link
+	 */
+	public function link(string $url, ?string $text = null): string
+	{
+		$control = '#[\x00-\x1F\x7F]|\xC2[\x80-\x9F]#';
+		if (preg_match($control, $url)) {
+			$shown = preg_replace_callback($control, fn($m) => addcslashes($m[0], "\0..\377"), $url);
+			throw new \InvalidArgumentException("The URL '$shown' holds a control character.");
+		} elseif (!$this->terminal || $this->colorDepth === ColorDepth::None) {
+			return $text === null || $text === $url ? $url : "$text ($url)";
+		}
+
+		// the link takes only the bytes 32-126, so the rest is encoded
+		$uri = preg_replace_callback('#[\x80-\xFF]+#', fn($m) => rawurlencode($m[0]), $url);
+		return "\e]8;;$uri\e\\" . ($text ?? $url) . "\e]8;;\e\\";
+	}
+
+
 	public function setColorDepth(ColorDepth $depth): void
 	{
 		$this->colorDepth = $depth;
