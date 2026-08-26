@@ -20,27 +20,42 @@ final class Parser
 
 
 	/**
-	 * Parses the command line, which is the one of the running process unless given.
+	 * Parses the command line, which is the one of the running process unless given. The line is always read from
+	 * the root; given a subcommand, it has to run that command or one below it.
 	 * @param  ?list<string>  $argv  the tokens without the name of the program
 	 */
 	public function parse(Command $command, ?array $argv = null): ParseResult
 	{
 		$argv ??= array_values(array_map(strval(...), array_slice((array) ($_SERVER['argv'] ?? []), 1)));
-		$occurrences = $this->collect($command, $argv);
-		$parameters = self::listParameters($command);
-		$values = $this->complete($parameters, $this->evaluate($parameters, $occurrences, $command));
-		return new ParseResult($command, $values, array_fill_keys(array_keys($occurrences), true), $argv === []);
+		[$selected, $occurrences] = $this->collect($command->getRoot(), $argv);
+		if (!in_array($command, $selected->getPath(), true)) {
+			throw new ParseException(
+				'The command line does not run command ' . HelpRenderer::formatCode($command->getFullName()) . '.',
+				$selected,
+				reason: ParseFailure::CommandMismatch,
+			);
+		}
+
+		$parameters = self::listParameters($selected);
+		if ($selected->commandRequired && $selected->getCommands()) {
+			throw new ParseException('Missing command.', $selected, reason: ParseFailure::MissingCommand);
+		}
+
+		$values = $this->complete($parameters, $this->evaluate($parameters, $occurrences, $selected));
+		return new ParseResult($selected, $values, array_fill_keys(array_keys($occurrences), true), $argv === []);
 	}
 
 
 	/**
-	 * @return array<string, Parameter>  the parameters of the command
+	 * @return array<string, Parameter>  the parameters of the command and of all commands above it
 	 */
 	private static function listParameters(Command $command): array
 	{
 		$parameters = [];
-		foreach ($command->getParameters() as $parameter) {
-			$parameters[$parameter->name] = $parameter;
+		foreach ($command->getPath() as $level) {
+			foreach ($level->getParameters() as $parameter) {
+				$parameters[$parameter->name] = $parameter;
+			}
 		}
 
 		return $parameters;
@@ -48,13 +63,14 @@ final class Parser
 
 
 	/**
-	 * Phase 1: reads the tokens into raw occurrences per parameter, resolving aliases. An option used without a value
-	 * yields the OptionPresent sentinel.
+	 * Phase 1: reads the tokens into raw occurrences per parameter and follows the command names down the tree,
+	 * resolving aliases. An option used without a value yields the OptionPresent sentinel.
 	 * @param  list<string>  $argv
-	 * @return array<string, list<mixed>>  the occurrences
+	 * @return array{Command, array<string, list<mixed>>}  the command the line runs and the occurrences
 	 */
-	private function collect(Command $command, array $argv): array
+	private function collect(Command $root, array $argv): array
 	{
+		$command = $root;
 		[$names, $negations] = self::indexOptions($command);
 		$arguments = $command->getArguments();
 		$occurrences = $extra = [];
@@ -65,6 +81,26 @@ final class Parser
 			$arg = $argv[$i++];
 			if (!$onlyPositional && $arg === '--') { // everything after -- is positional
 				$onlyPositional = true;
+				continue;
+
+			} elseif (
+				!$onlyPositional
+				&& !self::isOption($arg)
+				&& ($commands = $command->getCommands())
+			) {
+				$subcommand = array_values(array_filter($commands, fn(Command $candidate) => $candidate->name === $arg))[0] ?? null;
+				if (!$subcommand) {
+					throw new ParseException(
+						'Unknown command ' . HelpRenderer::formatCode($arg) . '.',
+						$command,
+						reason: ParseFailure::UnknownCommand,
+						token: $arg,
+					);
+				}
+
+				$command = $subcommand;
+				[$names, $negations] = self::indexOptions($command);
+				$arguments = $command->getArguments();
 				continue;
 
 			} elseif ($onlyPositional || !self::isOption($arg)) {
@@ -147,7 +183,7 @@ final class Parser
 			);
 		}
 
-		return $occurrences;
+		return [$command, $occurrences];
 	}
 
 
@@ -207,20 +243,22 @@ final class Parser
 
 
 	/**
-	 * Indexes the options of the command by name and by alias, and apart from them by the negation of a flag.
+	 * Indexes the options valid at the command by name and by alias, and apart from them by the negation of a flag.
 	 * @return array{array<string, Flag|Option>, array<string, Flag>}
 	 */
 	private static function indexOptions(Command $command): array
 	{
 		$names = $negations = [];
-		foreach ($command->getOptions() as $option) {
-			$names[$option->name] = $option;
-			if ($option->alias !== null) {
-				$names[$option->alias] = $option;
-			}
+		foreach ($command->getPath() as $level) {
+			foreach ($level->getOptions() as $option) {
+				$names[$option->name] = $option;
+				if ($option->alias !== null) {
+					$names[$option->alias] = $option;
+				}
 
-			if ($option instanceof Flag && $option->negation !== null) {
-				$negations[$option->negation] = $option;
+				if ($option instanceof Flag && $option->negation !== null) {
+					$negations[$option->negation] = $option;
+				}
 			}
 		}
 
