@@ -21,7 +21,7 @@ final class Command
 	/** @var ?list<string>  the usage lines written by hand; null generates them from the definitions */
 	public readonly ?array $usage;
 
-	/** the command line has to name one of the commands below */
+	/** the command line has to name one of the commands below, unless a standalone flag answers */
 	public readonly bool $commandRequired;
 
 	private ?self $parent = null;
@@ -153,7 +153,7 @@ final class Command
 	/**
 	 * Adds a command such as check in "tool check src". It inherits the options of this command.
 	 * @param  string|list<string>|null  $usage  the usage line(s) written by hand; null generates them from the definitions
-	 * @param  bool  $commandRequired  the command line has to name one of the commands below
+	 * @param  bool  $commandRequired  the command line has to name one of the commands below, unless a standalone flag answers
 	 */
 	public function addCommand(
 		string $name,
