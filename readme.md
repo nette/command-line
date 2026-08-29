@@ -10,6 +10,7 @@ Nette Command-Line
 A lightweight library for building command-line applications in PHP. It provides:
 
 - **Argument parsing** with flags, options, positional arguments and commands
+- **Generated help** that is always in sync with what the script accepts
 - **Colorful terminal output** with ANSI support
 
 Install it using Composer:
@@ -26,10 +27,11 @@ If you like Nette, **[please make a donation now](https://nette.org/donate)**. T
 Parsing Command-Line Arguments
 ==============================
 
-Every CLI script needs to handle arguments like `--verbose`, `-o output.txt`, or plain file names. The library splits the job into three classes, each doing one thing:
+Every CLI script needs to handle arguments like `--verbose`, `-o output.txt`, or plain file names. The library splits the job into four classes, each doing one thing:
 
 - `Command` says what the script accepts,
 - `Parser` reads the command line according to it,
+- `HelpRenderer` draws the help from it,
 - `Console` writes to the terminal.
 
 ```php
@@ -275,9 +277,14 @@ $explain->addArgument('rule', 'Name of the rule');
 $result = (new Parser)->parse($cli);
 ```
 
-The first positional token picks the command, and `$result->command` tells you which one it was. When the line names no command, it is the program itself, unless you create it with `commandRequired: true`, in `new Command()` or in `addCommand()`, which refuses such a line. The natural way to dispatch is `match`:
+The first positional token picks the command, and `$result->command` tells you which one it was. When the line names no command, it is the program itself, unless you create it with `commandRequired: true`, in `new Command()` or in `addCommand()`, which refuses such a line and shows `<command>` in the usage. A standalone `--help` answers for any command, so handle it first; then the natural way to dispatch is `match`:
 
 ```php
+if ($result['--help']) {
+	(new HelpRenderer)->render($result->command);
+	exit(0);
+}
+
 exit(match ($result->command) {
 	$check => $app->check($result['paths'], $result['--generate-baseline']),
 	$explain => $app->explain($result['rule']),
@@ -298,6 +305,40 @@ $result = (new Parser)->parse($check, ['check', 'src', '--generate-baseline']);
 ```
 
 
+Printing Help
+=============
+
+The help is generated from the definitions, so it always says what the script really accepts. `HelpRenderer` draws it for the program or for any of its commands, with the descriptions aligned and wrapped to the width of the terminal. `render()` writes it out, in color where the terminal supports it:
+
+```php
+use Nette\CommandLine\HelpRenderer;
+
+$command = new Command('convert', 'Converts files between formats.');
+$command->addFlag('--verbose', 'Enable verbose mode', alias: '-v');
+$command->addOption('--output', 'Output file', alias: '-o');
+$command->addArgument('input', 'Input file');
+
+(new HelpRenderer)->render($command);
+```
+
+```
+Usage: convert [options] <input>
+
+Converts files between formats.
+
+Options:
+  -v, --verbose         Enable verbose mode
+  -o, --output <value>  Output file
+
+Arguments:
+  <input>               Input file
+```
+
+The usage opens the help and the description of the command follows it; in the help of the parent, the same description stands beside the command. The help puts `Options:`, `Arguments:` or `Commands:` in front of every run of one kind. When the width leaves too little room for two columns, each description goes below its syntax. The help of a command lists its arguments, its own options and, under `Global options:`, those it inherits.
+
+`renderToString()` returns the help instead, as plain text when the renderer has no console, which suits a file or a test. A width of your own replaces the width of the terminal: `(new HelpRenderer(width: 100))->renderToString($command)`. To send the help to the error output, give the renderer a console over that stream, as the error handling below does.
+
+
 Handling --help and --version
 -----------------------------
 
@@ -312,7 +353,7 @@ $command->addArgument('input');  // required
 $args = (new Parser)->parse($command);
 
 if ($args['--help']) {
-	echo "Usage: convert [options] <input>\n";
+	(new HelpRenderer)->render($args->command);
 	exit;
 }
 ```
@@ -333,6 +374,8 @@ try {
 } catch (ParseException $e) {
 	$stderr = new Console(STDERR);
 	$stderr->writeLine("Error: {$e->getMessage()}");
+	$stderr->writeLine();
+	(new HelpRenderer($stderr))->render($e->command);
 	exit(2);
 }
 ```

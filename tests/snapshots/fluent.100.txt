@@ -1,0 +1,51 @@
+Usage: imagic [options] [command]
+
+Converts and resizes images.
+
+Options:
+  -h, --help                 Print this help
+  -c, --config <value>       Configuration file
+
+Commands:
+  convert <source> [target]  Converts images from one format to another
+  remote                     Manages remote storages
+
+----
+
+Usage: imagic convert [options] <source> [target]
+
+Converts images from one format to another
+
+Options:
+  --overwrite           Replace the files that already exist
+
+Arguments:
+  <source>              Obrázek ke konverzi, třeba fotka z dovolené
+
+Options:
+  --format <png|jpeg>   Format of the result (default: png)
+
+Arguments:
+  [target]              Where to write the result
+
+Options:
+  --quality <value>     Kvalita výsledku (default: 90)
+  --a-very-long-option-name-indeed[=value]
+                        An option whose syntax does not fit the column
+
+Global options:
+  -h, --help            Print this help
+  -c, --config <value>  Configuration file
+
+----
+
+Usage: imagic remote add [options] <name>
+
+Adds a storage
+
+Arguments:
+  <name>                Name of the storage
+
+Options:
+  -h, --help            Print this help
+  -c, --config <value>  Configuration file

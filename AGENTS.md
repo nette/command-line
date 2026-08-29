@@ -18,8 +18,9 @@ three phases of `parse()` with the command selection and the sentinel, `isset()`
 
 **Nette Command Line** is a tiny, zero-dependency library. `Command` defines a
 command line as a tree of the program and its commands, `Parser` reads a command
-line against it and returns a `Result`, `Console` writes to a stream in color and
-`Ansi` measures text the way a terminal shows it. The parameters live in the
+line against it and returns a `Result`, `HelpRenderer` draws the help of any
+command, `Console` writes to a stream in color and `Ansi` measures text the way a
+terminal shows it. The parameters live in the
 `Parameters` namespace: `Flag` extends `Parameter`, while `Option` and `Argument`
 extend it through `ValueParameter`.
 
@@ -47,10 +48,10 @@ composer phpstan
 
 ## Working in this repo
 
-- **Definition, parsing and output are three classes.** `Command` never
-  touches `argv`, the environment or a stream; `Parser` takes the command as an
-  argument and keeps no state; `Console` knows no `Command`. Each node keeps one
-  ordered list of items.
+- **Definition, parsing, help and output are four classes.** `Command` never
+  touches `argv`, the environment or a stream; `Parser` and `HelpRenderer` take
+  the command as an argument and keep no state; `Console` knows no `Command`.
+  Each node keeps one ordered list of items and the help is always drawn from it.
 - **Every setting is a named argument of `add*()` and cannot change afterwards**, so
   everything is refused at once, the rules over several arguments included, and the
   parser checks no definition. A setting that makes no sense for a kind of parameter
@@ -73,6 +74,8 @@ composer phpstan
   an application writing to stdout and stderr makes one for each. `hasColors()` and
   `isTerminal()` are separate on purpose: gate *color* on the first (it honors
   `NO_COLOR`/`FORCE_COLOR`), *interactive-only* features (a progress bar, a prompt) on the
-  second, since a user may disable color yet still be on a real terminal.
+  second, since a user may disable color yet still be on a real terminal. The help
+  colors only through its own roles, which `HelpRenderer::Theme` maps to colors;
+  `Console` knows no roles.
 - User-facing how-to (`addFlag`/`addOption`/`addArgument` and their settings, the help-text
   format, color codes) is manual material and lives in the public web docs, not here.

@@ -22,7 +22,7 @@ final class Command
 {
 	private ?self $parent = null;
 
-	/** @var list<Flag|Option|Argument|self>  in the order they were added */
+	/** @var list<Flag|Option|Argument|self>  in the order the help shows them */
 	private array $items = [];
 
 
@@ -231,7 +231,7 @@ final class Command
 
 
 	/**
-	 * @return list<Flag|Option|Argument|self>  in the order they were added
+	 * @return list<Flag|Option|Argument|self>  in the order the help shows them
 	 * @internal
 	 */
 	public function getItems(): array

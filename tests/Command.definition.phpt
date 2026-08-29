@@ -169,6 +169,15 @@ test('an option is used by its name, its alias and the negation of a flag', func
 });
 
 
+test('the default value in words', function () {
+	$command = new Command;
+	Assert::same('8', $command->addOption('--jobs', default: 8)->describeDefault());
+	Assert::same('2', $command->addOption('--level', enum: Level::class, default: Level::High)->describeDefault());
+	Assert::null($command->addFlag('--color', default: true)->describeDefault());
+	Assert::null($command->addOption('--tags', default: ['a'])->describeDefault());
+});
+
+
 test('a name or an alias is taken above and below, not beside', function () {
 	$root = new Command;
 	$root->addFlag('--verbose', alias: '-v');

@@ -3,13 +3,17 @@
 Small classes, mostly clear from their signatures. This is the thin "invariants & traps"
 layer, the facts that are expensive to rediscover.
 
-## Three roles, three classes
+## Four roles, four classes
 
 - **`Command`** is the definition: a tree whose root is the program and whose nodes are its
   commands. It knows nothing of `argv`, the environment or the output.
 - **`Parser`** reads a command line against the tree and returns an immutable `Result`.
   It holds no state.
-- **`Console`** writes to a stream and knows no `Command`.
+- **`HelpRenderer`** draws the help of any node, `render()` into a console and
+  `renderToString()` into a string. Like `Parser`, it takes the node as an argument and keeps
+  nothing between calls.
+- **`Console`** writes to a stream and knows no `Command`. The renderer colors and writes
+  through it; `renderToString()` without a console is plain text.
 
 The parameters live in the `Parameters` namespace and split by **whether they take a value**,
 the axis most settings follow. `Flag` takes none; `ValueParameter` holds the enum, the
@@ -24,7 +28,7 @@ loudly. `Flag` and `Option` each keep their own alias, and `Command::getOptions(
 A subcommand exists only through `addCommand()`, knows its parent and cannot be moved.
 
 Each node keeps an **ordered list of items**, `Flag`, `Option`, `Argument` and `Command`, in
-the order they were added, and that list is its only model:
+the order the help shows them, and that list is its only model:
 `getCommands()`, `getParameters()`, `getOptions()` and `getArguments()` filter it, a lookup by
 name walks it, and the place of the node (`getRoot()`, `getPath()`, `getFullName()`) is derived
 from the parent. Nothing is stored twice, so nothing can disagree. **What cannot change is a
@@ -107,7 +111,7 @@ Consequences worth knowing:
   stand alone at the end of the line, since text after it is read as rule names.
 - A path is resolved by `Normalizers::realPath()`, an ordinary normalizer. **The model
   describes a value only where another part reads it**: the enum stays a setting, because the
-  error message shows its values, while a conversion nobody else reads is a closure.
+  help and the error message show its values, while a conversion nobody else reads is a closure.
 - **`ParseException::$command` is never null**; it is the node where the line went wrong,
   so the application can print the help of exactly that command. A bad value is judged
   after the whole line is read, so it reports the selected node, even for an option
@@ -127,6 +131,28 @@ null**: consumers test flags with `isset($result['--fix'])`, and a naive "is the
 known" would silently make every such test true. The selected command is a property, never
 a reserved key among the values. Presence survives into the result: `wasProvided()` answers
 from the occurrences, never from the value.
+
+## The help
+
+`HelpRenderer` draws one node. **It never runs a normalizer, a callback or the parser**: the
+help has to be printable before the application does any work. The colored output is the
+plain one with escape sequences on top; stripping them gives the plain one back.
+
+- Headings `Options:`, `Arguments:` and `Commands:` are added in front of every run of one kind.
+- The usage always opens the help and the description of the node follows it, collapsed and
+  wrapped like any other description; in the help of the parent the description stands beside
+  the node in the list.
+- Inherited options come last, under `Global options:` when the node has options of its
+  own, otherwise under `Options:`.
+- The syntax column is as wide as the longest syntax that **still fits** the limit; a longer
+  one gets a line of its own and does not stretch the column for the rest. When fewer than
+  `MinDescriptionWidth` columns stay for descriptions, every description goes below its syntax.
+- Widths are measured by `Ansi::measure()`, so a colored help wraps like the plain one.
+
+The help colors only through its own **roles**, which the private `HelpRenderer::Theme` maps to
+the colors of `Console::color()`; `Console` knows no roles. Roles are chosen by conditions, so a
+role missing from the map shows only when that branch is drawn in color, which the colored
+snapshot `tests/snapshots/fluent.ansi.txt` does for all of them.
 
 ## Console: one stream, two questions about it
 
@@ -149,3 +175,19 @@ the second: a user may set `NO_COLOR` and still be on a real terminal.
   tests, and takes it only as a positive integer. Otherwise the terminal is asked only when the
   stream is one, so the help sent to STDERR follows STDERR; that answer is cached for the
   process, and without `exec()` the width is 80.
+
+## Ansi: the single measure of width
+
+`Ansi` is the one place that knows how wide text is on a terminal: an escape sequence takes no
+column, a grapheme cluster one and a wide character (CJK, Hangul, fullwidth, emoji) two. The help,
+a status and any column of an application measure through it, so a colored line wraps like the
+plain one. `truncate()` keeps the escape sequences of what it drops, so a color it opened is still
+closed, and with `keepEnd` it cuts the front, where a path is least interesting. **Nothing it
+returns is ever wider than asked**: an ellipsis that would not fit is left out, which is what a
+status cut to a narrow terminal depends on.
+
+## Tests
+
+The snapshots in `tests/snapshots` record the help of the program built by
+`tests/fixtures/fluent.php` at three widths and in color, so a change of the layout shows as
+a diff there rather than in the assertions of single tests.

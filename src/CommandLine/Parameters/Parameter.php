@@ -8,6 +8,7 @@
 namespace Nette\CommandLine\Parameters;
 
 use Nette\CommandLine\Command;
+use function is_bool, is_scalar;
 
 
 /**
@@ -25,5 +26,20 @@ abstract class Parameter
 		/** the values are collected into a list */
 		public readonly bool $repeatable = false,
 	) {
+	}
+
+
+	/**
+	 * Returns the default value in words, as the help shows it: a scalar value or the value of an enum case, and null
+	 * when there is nothing to show.
+	 */
+	public function describeDefault(): ?string
+	{
+		$value = $this->default;
+		return match (true) {
+			$value instanceof \BackedEnum => (string) $value->value,
+			is_scalar($value) && !is_bool($value) => (string) $value,
+			default => null,
+		};
 	}
 }
