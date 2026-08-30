@@ -1,6 +1,8 @@
 <?php declare(strict_types=1);
 
 use Nette\CommandLine\Command;
+use Nette\CommandLine\Help\Section;
+use Nette\CommandLine\Help\Text;
 use Nette\CommandLine\Parameters\Flag;
 use Nette\CommandLine\Parameters\ValueParameter;
 use Tester\Assert;
@@ -73,6 +75,27 @@ test('commands form a tree', function () {
 		InvalidArgumentException::class,
 		"Command 'nope' is not defined.",
 	);
+});
+
+
+test('sections and text are items in the order they were added, the usage is not', function () {
+	$command = new Command('tool');
+	$command->addText('Does a thing.');
+	$command->addSection('Options:');
+	$verbose = $command->addFlag('--verbose');
+
+	[$text, $section, $option] = $command->getItems();
+	Assert::type(Text::class, $text);
+	Assert::same('Does a thing.', $text->text);
+	Assert::type(Section::class, $section);
+	Assert::same('Options', $section->title); // the colon is added when it is rendered
+	Assert::same($verbose, $option);
+
+	Assert::null($command->usage);
+	Assert::same(['tool [options]'], (new Command(usage: 'tool [options]'))->usage);
+	Assert::same(['a', 'b'], (new Command(usage: ['a', 'b']))->usage);
+	Assert::same(['tool check'], $command->addCommand('check', usage: 'tool check')->usage);
+	Assert::count(4, $command->getItems());
 });
 
 

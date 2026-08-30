@@ -27,12 +27,13 @@ and of its constructor must keep the same order; swapping two of the same type b
 loudly. `Flag` and `Option` each keep their own alias, and `Command::getOptions()` returns both.
 A subcommand exists only through `addCommand()`, knows its parent and cannot be moved.
 
-Each node keeps an **ordered list of items**, `Flag`, `Option`, `Argument` and `Command`, in
-the order the help shows them, and that list is its only model:
+Each node keeps an **ordered list of items**, `Flag`, `Option`, `Argument`, `Command`,
+`Section` and `Text`, in the order the help shows them, and that list is its only model:
 `getCommands()`, `getParameters()`, `getOptions()` and `getArguments()` filter it, a lookup by
 name walks it, and the place of the node (`getRoot()`, `getPath()`, `getFullName()`) is derived
 from the parent. Nothing is stored twice, so nothing can disagree. **What cannot change is a
-`readonly` property, what grows with `add*()` is read through a method.**
+`readonly` property, what grows with `add*()` is read through a method.** The usage is not an
+item but a property of the node, given when the node is created.
 
 ## Checks of the definition
 
@@ -138,10 +139,12 @@ from the occurrences, never from the value.
 help has to be printable before the application does any work. The colored output is the
 plain one with escape sequences on top; stripping them gives the plain one back.
 
-- Headings `Options:`, `Arguments:` and `Commands:` are added in front of every run of one kind.
-- The usage always opens the help and the description of the node follows it, collapsed and
-  wrapped like any other description; in the help of the parent the description stands beside
-  the node in the list.
+- Headings `Options:`, `Arguments:` and `Commands:` are added in front of every run of one
+  kind, and only when the author wrote no heading at all; one of their own means they
+  arrange the help.
+- The usage, generated or written by hand, always opens the help and the description of the
+  node follows it, collapsed and wrapped like any other description; in the help of the parent
+  the description stands beside the node in the list.
 - Inherited options come last, under `Global options:` when the node has options of its
   own, otherwise under `Options:`.
 - The syntax column is as wide as the longest syntax that **still fits** the limit; a longer

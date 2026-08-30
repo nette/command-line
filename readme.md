@@ -334,7 +334,7 @@ Arguments:
   <input>               Input file
 ```
 
-The usage opens the help and the description of the command follows it; in the help of the parent, the same description stands beside the command. The help puts `Options:`, `Arguments:` or `Commands:` in front of every run of one kind. When the width leaves too little room for two columns, each description goes below its syntax. The help of a command lists its arguments, its own options and, under `Global options:`, those it inherits.
+The usage opens the help, generated unless you give your own as `usage:` to `new Command()` or `addCommand()`, and the description of the command follows it; in the help of the parent, the same description stands beside the command. `addSection()` places a heading and `addText()` a paragraph, in the order you call them; without any heading of your own, the help puts `Options:`, `Arguments:` or `Commands:` in front of every run of one kind. When the width leaves too little room for two columns, each description goes below its syntax. The help of a command lists its arguments, its own options and, under `Global options:`, those it inherits.
 
 `renderToString()` returns the help instead, as plain text when the renderer has no console, which suits a file or a test. A width of your own replaces the width of the terminal: `(new HelpRenderer(width: 100))->renderToString($command)`. To send the help to the error output, give the renderer a console over that stream, as the error handling below does.
 

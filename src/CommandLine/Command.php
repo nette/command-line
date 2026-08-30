@@ -7,31 +7,41 @@
 
 namespace Nette\CommandLine;
 
+use Nette\CommandLine\Help\Section;
+use Nette\CommandLine\Help\Text;
 use Nette\CommandLine\Parameters\Argument;
 use Nette\CommandLine\Parameters\Flag;
 use Nette\CommandLine\Parameters\Option;
 use Nette\CommandLine\Parameters\Parameter;
-use function func_get_args;
+use function func_get_args, is_string;
 
 
 /**
- * The definition of a command line: a program or one of its commands, with parameters and subcommands. Commands form
- * a tree whose root is the program.
+ * The definition of a command line: a program or one of its commands, with parameters, subcommands and the texts
+ * of its help. Commands form a tree whose root is the program.
  */
 final class Command
 {
+	/** @var ?list<string>  the usage lines written by hand; null generates them from the definitions */
+	public readonly ?array $usage;
+
 	private ?self $parent = null;
 
-	/** @var list<Flag|Option|Argument|self>  in the order the help shows them */
+	/** @var list<Flag|Option|Argument|self|Section|Text>  in the order the help shows them */
 	private array $items = [];
 
 
+	/**
+	 * @param  string|list<string>|null  $usage
+	 */
 	public function __construct(
 		public readonly ?string $name = null,
 		public readonly ?string $description = null,
+		string|array|null $usage = null,
 		/** the command line has to name one of the commands below, unless a standalone flag answers */
 		public readonly bool $commandRequired = false,
 	) {
+		$this->usage = is_string($usage) ? [$usage] : $usage;
 	}
 
 
@@ -118,11 +128,13 @@ final class Command
 
 	/**
 	 * Adds a command such as check in "tool check src". It inherits the options of this command.
+	 * @param  string|list<string>|null  $usage  the usage line(s) written by hand; null generates them from the definitions
 	 * @param  bool  $commandRequired  the command line has to name one of the commands below, unless a standalone flag answers
 	 */
 	public function addCommand(
 		string $name,
 		?string $description = null,
+		string|array|null $usage = null,
 		bool $commandRequired = false,
 	): self
 	{
@@ -137,6 +149,26 @@ final class Command
 		$command->parent = $this;
 		$this->items[] = $command;
 		return $command;
+	}
+
+
+	/**
+	 * Adds a heading to the help; the definitions that follow belong under it.
+	 */
+	public function addSection(string $title): static
+	{
+		$this->items[] = new Section($title);
+		return $this;
+	}
+
+
+	/**
+	 * Adds a free paragraph at this place of the help.
+	 */
+	public function addText(string $text): static
+	{
+		$this->items[] = new Text($text);
+		return $this;
 	}
 
 
@@ -231,7 +263,7 @@ final class Command
 
 
 	/**
-	 * @return list<Flag|Option|Argument|self>  in the order the help shows them
+	 * @return list<Flag|Option|Argument|self|Section|Text>  in the order the help shows them
 	 * @internal
 	 */
 	public function getItems(): array

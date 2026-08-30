@@ -50,6 +50,40 @@ test('the help of a program', function () {
 });
 
 
+test('sections and text', function () {
+	$command = new Command('tool');
+	$command->addText('Does a thing.');
+	$command->addSection('Options');
+	$command->addFlag('--verbose', 'Talk more');
+
+	Assert::same(
+		"Usage: tool [options]\n"
+		. "\n"
+		. "Does a thing.\n"
+		. "\n"
+		. "Options:\n"
+		. "  --verbose  Talk more\n",
+		renderHelp($command),
+	);
+});
+
+
+test('the usage may be given by hand', function () {
+	$command = new Command(usage: ['tool check [paths...]', 'tool fix [paths...]']);
+	$command->addFlag('--verbose');
+
+	Assert::same(
+		"Usage:\n"
+		. "  tool check [paths...]\n"
+		. "  tool fix [paths...]\n"
+		. "\n"
+		. "Options:\n"
+		. "  --verbose\n",
+		renderHelp($command),
+	);
+});
+
+
 test('a default value', function () {
 	$command = new Command('tool');
 	$command->addOption('--format', 'Output format', default: 'json');
@@ -109,6 +143,10 @@ test('the description of the command follows its usage', function () {
 	$command = new Command('tool', 'Does a thing.');
 	$command->addFlag('--verbose');
 	Assert::same("Usage: tool [options]\n\nDoes a thing.\n\nOptions:\n  --verbose\n", renderHelp($command));
+
+	$command = new Command('tool', 'Does a thing.', usage: 'tool [--verbose]');
+	$command->addFlag('--verbose');
+	Assert::same("Usage: tool [--verbose]\n\nDoes a thing.\n\nOptions:\n  --verbose\n", renderHelp($command));
 
 	$command = new Command('tool', "Does a thing\n\tand then another.");
 	Assert::same("Usage: tool\n\nDoes a thing and\nthen another.\n", renderHelp($command, 20));

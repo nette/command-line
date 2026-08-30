@@ -22,7 +22,8 @@ line against it and returns a `Result`, `HelpRenderer` draws the help of any
 command, `Console` writes to a stream in color and `Ansi` measures text the way a
 terminal shows it. The parameters live in the
 `Parameters` namespace: `Flag` extends `Parameter`, while `Option` and `Argument`
-extend it through `ValueParameter`.
+extend it through `ValueParameter`. `Section` and `Text` in the `Help` namespace
+shape the help.
 
 - **PHP Version**: 8.2 - 8.5
 - **Package**: `nette/command-line`
