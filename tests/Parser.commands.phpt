@@ -45,6 +45,55 @@ test('options of the commands above are valid on both sides of the command name'
 });
 
 
+test('an unknown command suggests a close one', function () {
+	Assert::exception(
+		fn() => (new Parser)->parse(app(), ['chekc']),
+		ParseException::class,
+		'Unknown command `chekc`. Did you mean `check`?',
+	);
+	Assert::exception(fn() => (new Parser)->parse(app(), ['zzz']), ParseException::class, 'Unknown command `zzz`.');
+});
+
+
+test('an option of another command says where it belongs', function () {
+	Assert::exception(
+		fn() => (new Parser)->parse(app(), ['explain', 'x', '--generate-baseline']),
+		ParseException::class,
+		'Option `--generate-baseline` belongs to command `check`.',
+	);
+	Assert::exception(
+		fn() => (new Parser)->parse(app(), ['--generate-baseline', 'check']),
+		ParseException::class,
+		'Option `--generate-baseline` belongs to command `check`.',
+	);
+});
+
+
+test('every command an option belongs to is named, but never a hidden option', function () {
+	$cli = new Command('tool');
+	$cli->addCommand('check')->addFlag('--diff');
+	$cli->addCommand('fix')->addFlag('--diff');
+	$cli->addCommand('debug')->addFlag('--trace', hidden: true);
+	$cli->addFlag('--secret-debug', hidden: true);
+	$cli->addFlag('--secret', hidden: true, negatable: true);
+	Assert::exception(
+		fn() => (new Parser)->parse($cli, ['--diff']),
+		ParseException::class,
+		'Option `--diff` belongs to commands `check` and `fix`.',
+	);
+	Assert::exception(fn() => (new Parser)->parse($cli, ['--trace']), ParseException::class, 'Unknown option `--trace`.');
+	Assert::exception(fn() => (new Parser)->parse($cli, ['--secret-debag']), ParseException::class, 'Unknown option `--secret-debag`.');
+	Assert::exception(fn() => (new Parser)->parse($cli, ['--no-secrt']), ParseException::class, 'Unknown option `--no-secrt`.');
+
+	$cli->addCommand('lint')->addFlag('--diff');
+	Assert::exception(
+		fn() => (new Parser)->parse($cli, ['--diff']),
+		ParseException::class,
+		'Option `--diff` belongs to commands `check`, `fix` and `lint`.',
+	);
+});
+
+
 test('the exception knows the command in which the line went wrong', function () {
 	$cli = app();
 	$e = Assert::exception(fn() => (new Parser)->parse($cli, ['explain']), ParseException::class, 'Missing required argument `<rule>`.');
