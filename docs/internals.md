@@ -147,6 +147,7 @@ plain one with escape sequences on top; stripping them gives the plain one back.
   the description stands beside the node in the list.
 - Inherited options come last, under `Global options:` when the node has options of its
   own, otherwise under `Options:`.
+- Hidden parameters appear nowhere, not even in the generated usage.
 - The syntax column is as wide as the longest syntax that **still fits** the limit; a longer
   one gets a line of its own and does not stretch the column for the rest. When fewer than
   `MinDescriptionWidth` columns stay for descriptions, every description goes below its syntax.

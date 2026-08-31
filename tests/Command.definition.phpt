@@ -99,6 +99,14 @@ test('sections and text are items in the order they were added, the usage is not
 });
 
 
+test('the settings that shape the help only', function () {
+	$option = (new Command)->addOption('--output', valueName: 'file', defaultDescription: 'current directory', hidden: true);
+	Assert::same('file', $option->valueName);
+	Assert::same('current directory', $option->defaultDescription);
+	Assert::true($option->hidden);
+});
+
+
 test('names', function () {
 	Assert::exception(
 		fn() => (new Command)->addFlag('verbose'),
@@ -196,6 +204,8 @@ test('the default value in words', function () {
 	$command = new Command;
 	Assert::same('8', $command->addOption('--jobs', default: 8)->describeDefault());
 	Assert::same('2', $command->addOption('--level', enum: Level::class, default: Level::High)->describeDefault());
+	Assert::same('current directory', $command->addOption('--dir', default: '/tmp', defaultDescription: 'current directory')->describeDefault());
+	Assert::null($command->addOption('--quiet', default: 'x', defaultDescription: '')->describeDefault());
 	Assert::null($command->addFlag('--color', default: true)->describeDefault());
 	Assert::null($command->addOption('--tags', default: ['a'])->describeDefault());
 });

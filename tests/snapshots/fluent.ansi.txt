@@ -4,7 +4,9 @@ Converts and resizes images.
 
 [1;33mOptions:[0m
   [1;32m-h, --help[0m                 Print this help
-  [1;32m-c, --config[0m [1;36m<value>[0m       Configuration file
+  [1;32m-c, --config[0m [1;36m<file>[0m        Configuration file [1;30m(default:
+                             imagic.neon in the current
+                             directory)[0m
 
 [1;33mCommands:[0m
   [1;32mconvert[0m [1;32m<source>[0m [1;32m[target][0m  Converts images from one format
@@ -18,27 +20,28 @@ Converts and resizes images.
 Converts images from one format to another
 
 [1;33mOptions:[0m
-  [1;32m--overwrite[0m           Replace the files that already exist
+  [1;32m--overwrite[0m          Replace the files that already exist
 
 [1;33mArguments:[0m
-  [1;32m<source>[0m              Obrázek ke konverzi, třeba fotka z
-                        dovolené
+  [1;32m<source>[0m             Obrázek ke konverzi, třeba fotka z
+                       dovolené
 
 [1;33mOptions:[0m
-  [1;32m--format[0m [1;36m<png|jpeg>[0m   Format of the result [1;30m(default: png)[0m
+  [1;32m--format[0m [1;36m<png|jpeg>[0m  Format of the result [1;30m(default: png)[0m
 
 [1;33mArguments:[0m
-  [1;32m[target][0m              Where to write the result
+  [1;32m[target][0m             Where to write the result
 
 [1;33mOptions:[0m
-  [1;32m--quality[0m [1;36m<value>[0m     Kvalita výsledku [1;30m(default: 90)[0m
+  [1;32m--quality[0m [1;36m<jakóst>[0m   Kvalita výsledku [1;30m(default: 90)[0m
   [1;32m--a-very-long-option-name-indeed[0m[1;36m[=value][0m
-                        An option whose syntax does not fit
-                        the column
+                       An option whose syntax does not fit
+                       the column
 
 [1;33mGlobal options:[0m
-  [1;32m-h, --help[0m            Print this help
-  [1;32m-c, --config[0m [1;36m<value>[0m  Configuration file
+  [1;32m-h, --help[0m           Print this help
+  [1;32m-c, --config[0m [1;36m<file>[0m  Configuration file [1;30m(default:
+                       imagic.neon in the current directory)[0m
 
 ----
 
@@ -47,8 +50,9 @@ Converts images from one format to another
 Adds a storage
 
 [1;33mArguments:[0m
-  [1;32m<name>[0m                Name of the storage
+  [1;32m<name>[0m               Name of the storage
 
 [1;33mOptions:[0m
-  [1;32m-h, --help[0m            Print this help
-  [1;32m-c, --config[0m [1;36m<value>[0m  Configuration file
+  [1;32m-h, --help[0m           Print this help
+  [1;32m-c, --config[0m [1;36m<file>[0m  Configuration file [1;30m(default:
+                       imagic.neon in the current directory)[0m

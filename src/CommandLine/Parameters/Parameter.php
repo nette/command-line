@@ -23,18 +23,26 @@ abstract class Parameter
 		public readonly ?string $description = null,
 		/** what the parameter is worth when it is absent from the command line, never checked or converted */
 		public readonly mixed $default = null,
+		/** how the help shows the default: null derives it from a scalar value, a string puts it in words, an empty one leaves it out */
+		public readonly ?string $defaultDescription = null,
 		/** the values are collected into a list */
 		public readonly bool $repeatable = false,
+		/** left out of the help */
+		public readonly bool $hidden = false,
 	) {
 	}
 
 
 	/**
-	 * Returns the default value in words, as the help shows it: a scalar value or the value of an enum case, and null
-	 * when there is nothing to show.
+	 * Returns the default value in words, as the help shows it: the description of the default when there is one,
+	 * otherwise a scalar value or the value of an enum case, and null when there is nothing to show.
 	 */
 	public function describeDefault(): ?string
 	{
+		if ($this->defaultDescription !== null) {
+			return $this->defaultDescription === '' ? null : $this->defaultDescription;
+		}
+
 		$value = $this->default;
 		return match (true) {
 			$value instanceof \BackedEnum => (string) $value->value,

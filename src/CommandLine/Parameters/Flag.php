@@ -32,14 +32,16 @@ final class Flag extends Parameter
 		/** --no-name turns the flag off, which parses as false */
 		public readonly bool $negatable = false,
 		mixed $default = null,
+		?string $defaultDescription = null,
 		bool $repeatable = false,
+		bool $hidden = false,
 	) {
 		NameSyntax::assertOptionName($name, $alias);
 		if ($negatable && !str_starts_with($name, '--')) {
 			throw new \InvalidArgumentException("Flag $name cannot be negated, only a flag with a long name such as --color can.");
 		}
 
-		parent::__construct($command, $name, $description, $default, $repeatable);
+		parent::__construct($command, $name, $description, $default, $defaultDescription, $repeatable, $hidden);
 		$this->negation = $negatable ? '--no-' . substr($name, 2) : null;
 	}
 

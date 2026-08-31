@@ -50,11 +50,12 @@ test('the help of a program', function () {
 });
 
 
-test('sections and text', function () {
+test('sections, text and a hidden option', function () {
 	$command = new Command('tool');
 	$command->addText('Does a thing.');
 	$command->addSection('Options');
 	$command->addFlag('--verbose', 'Talk more');
+	$command->addFlag('--secret', 'Never shown', hidden: true);
 
 	Assert::same(
 		"Usage: tool [options]\n"
@@ -84,17 +85,23 @@ test('the usage may be given by hand', function () {
 });
 
 
-test('a default value', function () {
+test('a value name and a default value', function () {
 	$command = new Command('tool');
+	$command->addOption('--output', 'Output file', alias: '-o', valueName: 'file');
 	$command->addOption('--format', 'Output format', default: 'json');
+	$command->addOption('--dir', 'Where to work', default: '/tmp', defaultDescription: 'current directory');
+	$command->addOption('--quiet', 'Say nothing', default: 'x', defaultDescription: '');
 	$command->addOption('--level', 'How loud', enum: Level::class, default: Level::High);
 
 	Assert::same(
 		"Usage: tool [options]\n"
 		. "\n"
 		. "Options:\n"
-		. "  --format <value>  Output format (default: json)\n"
-		. "  --level <1|2>     How loud (default: 2)\n",
+		. "  -o, --output <file>  Output file\n"
+		. "  --format <value>     Output format (default: json)\n"
+		. "  --dir <value>        Where to work (default: current directory)\n"
+		. "  --quiet <value>      Say nothing\n"
+		. "  --level <1|2>        How loud (default: 2)\n",
 		renderHelp($command),
 	);
 });

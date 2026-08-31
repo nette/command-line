@@ -5,8 +5,10 @@ Converts and resizes images.
 Options:
   -h, --help
     Print this help
-  -c, --config <value>
+  -c, --config <file>
     Configuration file
+    (default: imagic.neon in
+    the current directory)
 
 Commands:
   convert <source> [target]
@@ -42,7 +44,7 @@ Arguments:
     Where to write the result
 
 Options:
-  --quality <value>
+  --quality <jakóst>
     Kvalita výsledku (default:
     90)
   --a-very-long-option-name-indeed[=value]
@@ -52,8 +54,10 @@ Options:
 Global options:
   -h, --help
     Print this help
-  -c, --config <value>
+  -c, --config <file>
     Configuration file
+    (default: imagic.neon in
+    the current directory)
 
 ----
 
@@ -68,5 +72,7 @@ Arguments:
 Options:
   -h, --help
     Print this help
-  -c, --config <value>
+  -c, --config <file>
     Configuration file
+    (default: imagic.neon in
+    the current directory)

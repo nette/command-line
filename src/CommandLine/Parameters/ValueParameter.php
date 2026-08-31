@@ -35,9 +35,11 @@ abstract class ValueParameter extends Parameter
 		/** @var ?(\Closure(mixed): mixed)  converts the value and reports a bad one by throwing */
 		public readonly ?\Closure $normalizer = null,
 		mixed $default = null,
+		?string $defaultDescription = null,
 		bool $repeatable = false,
+		bool $hidden = false,
 	) {
-		parent::__construct($command, $name, $description, $default, $repeatable);
+		parent::__construct($command, $name, $description, $default, $defaultDescription, $repeatable, $hidden);
 
 		if ($enum === null || is_array($enum)) {
 			$this->enum = $enum === null ? null : array_map(strval(...), $enum);

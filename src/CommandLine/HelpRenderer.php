@@ -94,18 +94,23 @@ final class HelpRenderer
 
 
 	/**
-	 * The items of the command with headings where the author wrote none, followed by the options it inherits from
-	 * the commands above.
+	 * The items of the command without the hidden parameters, with headings where the author wrote none,
+	 * followed by the options it inherits from the commands above.
 	 * @return list<Flag|Option|Argument|Command|Section|Text>
 	 */
 	private static function collectItems(Command $command): array
 	{
-		$own = $command->getItems();
+		$own = array_values(array_filter(
+			$command->getItems(),
+			fn($item) => !$item instanceof Parameter || !$item->hidden,
+		));
 
 		$inherited = [];
 		foreach (array_slice($command->getPath(), 0, -1) as $ancestor) {
 			foreach ($ancestor->getOptions() as $option) {
-				$inherited[] = $option;
+				if (!$option->hidden) {
+					$inherited[] = $option;
+				}
 			}
 		}
 
@@ -113,7 +118,7 @@ final class HelpRenderer
 			return self::withHeadings($own);
 		}
 
-		$hasOwnOptions = (bool) $command->getOptions();
+		$hasOwnOptions = (bool) array_filter($command->getOptions(), fn($option) => !$option->hidden);
 		return [...self::withHeadings($own), new Section($hasOwnOptions ? 'Global options' : 'Options'), ...$inherited];
 	}
 
@@ -172,7 +177,7 @@ final class HelpRenderer
 		}
 
 		foreach ($command->getPath() as $level) {
-			if ($level->getOptions()) {
+			if (array_filter($level->getOptions(), fn($option) => !$option->hidden)) {
 				$parts[] = '[options]';
 				break;
 			}
@@ -183,7 +188,9 @@ final class HelpRenderer
 		}
 
 		foreach ($command->getArguments() as $argument) {
-			$parts[] = $this->formatSyntax($argument);
+			if (!$argument->hidden) {
+				$parts[] = $this->formatSyntax($argument);
+			}
 		}
 
 		return implode(' ', $parts);
@@ -230,7 +237,9 @@ final class HelpRenderer
 		if ($item instanceof Command) {
 			$arguments = [];
 			foreach ($item->getArguments() as $argument) {
-				$arguments[] = $this->formatSyntax($argument, $styled);
+				if (!$argument->hidden) {
+					$arguments[] = $this->formatSyntax($argument, $styled);
+				}
 			}
 
 			return implode(' ', [$paint('command', (string) $item->name), ...$arguments]);
@@ -243,7 +252,7 @@ final class HelpRenderer
 		$name = $item instanceof Flag && $item->negatable ? '--[no-]' . substr($item->name, 2) : $item->name;
 		$syntax = $paint('option', $item->alias === null ? $name : "$item->alias, $name");
 		if ($item instanceof Option) {
-			$value = $item->enum === null ? 'value' : implode('|', $item->enum);
+			$value = $item->enum === null ? ($item->valueName ?? 'value') : implode('|', $item->enum);
 			$syntax .= $item->valueOptional
 				? $paint('value', "[=$value]")
 				: ' ' . $paint('value', "<$value>");

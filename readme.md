@@ -144,7 +144,7 @@ Arguments can appear anywhere on the command line, before or after the options. 
 
 Several single-letter flags can be written as one token: `-va` means `-v -a`, and the last letter may take a value, so `-vao out.txt` means `-v -a -o out.txt`.
 
-A flag takes no value, so `addFlag()` has none of the settings of a value. `enum` and `normalizer` exist on `addOption()` and `addArgument()`, `valueOptional` on `addOption()` only.
+A flag takes no value, so `addFlag()` has none of the settings of a value. `enum` and `normalizer` exist on `addOption()` and `addArgument()`, `valueOptional` and `valueName` on `addOption()` only.
 
 
 Default Values
@@ -315,7 +315,7 @@ use Nette\CommandLine\HelpRenderer;
 
 $command = new Command('convert', 'Converts files between formats.');
 $command->addFlag('--verbose', 'Enable verbose mode', alias: '-v');
-$command->addOption('--output', 'Output file', alias: '-o');
+$command->addOption('--output', 'Output file', alias: '-o', valueName: 'file');
 $command->addArgument('input', 'Input file');
 
 (new HelpRenderer)->render($command);
@@ -327,14 +327,20 @@ Usage: convert [options] <input>
 Converts files between formats.
 
 Options:
-  -v, --verbose         Enable verbose mode
-  -o, --output <value>  Output file
+  -v, --verbose        Enable verbose mode
+  -o, --output <file>  Output file
 
 Arguments:
-  <input>               Input file
+  <input>              Input file
 ```
 
 The usage opens the help, generated unless you give your own as `usage:` to `new Command()` or `addCommand()`, and the description of the command follows it; in the help of the parent, the same description stands beside the command. `addSection()` places a heading and `addText()` a paragraph, in the order you call them; without any heading of your own, the help puts `Options:`, `Arguments:` or `Commands:` in front of every run of one kind. When the width leaves too little room for two columns, each description goes below its syntax. The help of a command lists its arguments, its own options and, under `Global options:`, those it inherits.
+
+Some settings shape the help only:
+
+- `hidden: true` keeps a parameter out of the help, while it still works,
+- `valueName: 'file'` names the value, `--output <file>`,
+- `defaultDescription: 'current directory'` puts the default value into words; an empty string leaves it out.
 
 `renderToString()` returns the help instead, as plain text when the renderer has no console, which suits a file or a test. A width of your own replaces the width of the terminal: `(new HelpRenderer(width: 100))->renderToString($command)`. To send the help to the error output, give the renderer a console over that stream, as the error handling below does.
 

@@ -30,9 +30,11 @@ final class Argument extends ValueParameter
 		array|string|null $enum = null,
 		?\Closure $normalizer = null,
 		mixed $default = null,
+		?string $defaultDescription = null,
 		bool $repeatable = false,
+		bool $hidden = false,
 	) {
 		NameSyntax::assertWordName($name, 'Argument');
-		parent::__construct($command, $name, $description, $enum, $normalizer, $default, $repeatable);
+		parent::__construct($command, $name, $description, $enum, $normalizer, $default, $defaultDescription, $repeatable, $hidden);
 	}
 }

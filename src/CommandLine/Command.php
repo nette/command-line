@@ -50,6 +50,7 @@ final class Command
 	 * @param  ?string  $alias  a short name such as -v
 	 * @param  bool  $standalone  answers on its own like --help: the rest of the line is neither checked nor converted
 	 * @param  bool  $negatable  --no-name turns a flag with a long name off, which parses as false
+	 * @param  ?string  $defaultDescription  the default in words for the help; an empty string leaves it out
 	 */
 	public function addFlag(
 		string $name,
@@ -58,7 +59,9 @@ final class Command
 		bool $standalone = false,
 		bool $negatable = false,
 		mixed $default = null,
+		?string $defaultDescription = null,
 		bool $repeatable = false,
+		bool $hidden = false,
 	): Flag
 	{
 		$flag = new Flag($this, ...func_get_args());
@@ -70,19 +73,24 @@ final class Command
 	/**
 	 * Adds an option with a value such as --output <file>.
 	 * @param  ?string  $alias  a short name such as -o
+	 * @param  ?string  $valueName  names the value in the help, e.g. 'file' shows as --output <file>
 	 * @param  bool  $valueOptional  the option may be used without its value, which then parses as true; a value is only ever attached with =
 	 * @param  list<string>|class-string<\BackedEnum>|null  $enum  the allowed values, or a backed enum whose case the value parses as
 	 * @param  ?(\Closure(mixed): mixed)  $normalizer  converts the value and reports a bad one by throwing
+	 * @param  ?string  $defaultDescription  the default in words for the help; an empty string leaves it out
 	 */
 	public function addOption(
 		string $name,
 		?string $description = null,
 		?string $alias = null,
+		?string $valueName = null,
 		bool $valueOptional = false,
 		array|string|null $enum = null,
 		?\Closure $normalizer = null,
 		mixed $default = null,
+		?string $defaultDescription = null,
 		bool $repeatable = false,
+		bool $hidden = false,
 	): Option
 	{
 		$option = new Option($this, ...func_get_args());
@@ -95,6 +103,7 @@ final class Command
 	 * Adds a positional argument such as <input>.
 	 * @param  list<string>|class-string<\BackedEnum>|null  $enum  the allowed values, or a backed enum whose case the value parses as
 	 * @param  ?(\Closure(mixed): mixed)  $normalizer  converts the value and reports a bad one by throwing
+	 * @param  ?string  $defaultDescription  the default in words for the help; an empty string leaves it out
 	 */
 	public function addArgument(
 		string $name,
@@ -103,7 +112,9 @@ final class Command
 		array|string|null $enum = null,
 		?\Closure $normalizer = null,
 		mixed $default = null,
+		?string $defaultDescription = null,
 		bool $repeatable = false,
+		bool $hidden = false,
 	): Argument
 	{
 		$argument = new Argument($this, ...func_get_args());
