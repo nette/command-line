@@ -144,6 +144,19 @@ test('an empty string is a value', function () {
 });
 
 
+test('an unknown option suggests a close match', function () {
+	$command = new Command;
+	$command->addFlag('--verbose', alias: '-v');
+	$command->addOption('--output');
+	Assert::exception(
+		fn() => parseArgs($command, ['--verbos']),
+		ParseException::class,
+		'Unknown option `--verbos`. Did you mean `--verbose`?',
+	);
+	Assert::exception(fn() => parseArgs($command, ['--zzzzzz']), ParseException::class, 'Unknown option `--zzzzzz`.');
+});
+
+
 test('control characters from the line are escaped in messages', function () {
 	$command = new Command;
 	$command->addArgument('input');
@@ -169,6 +182,11 @@ test('a negatable flag', function () {
 	Assert::same(['--color' => false], parseArgs($command, ['--no-color']));
 	Assert::same(['--color' => false], parseArgs($command, ['--color', '--no-color']));
 	Assert::exception(fn() => parseArgs($command, ['--no-color=1']), ParseException::class, 'Option `--no-color` does not accept a value.');
+	Assert::exception(
+		fn() => parseArgs($command, ['--no-colr']),
+		ParseException::class,
+		'Unknown option `--no-colr`. Did you mean `--no-color`?',
+	);
 });
 
 
