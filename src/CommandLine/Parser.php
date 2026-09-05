@@ -105,14 +105,14 @@ final class Parser
 
 	/**
 	 * Phase 1: reads the tokens into raw occurrences per parameter and follows the command names down the tree,
-	 * resolving aliases. An option used without a value yields the OptionPresent sentinel.
+	 * resolving aliases and bundles. An option used without a value yields the OptionPresent sentinel.
 	 * @param  list<string>  $argv
 	 * @return array{Command, array<string, list<mixed>>}  the command the line runs and the occurrences
 	 */
 	private function collect(Command $root, array $argv): array
 	{
 		$command = $root;
-		[$names, $negations] = self::indexOptions($command);
+		[$names, $negations, $numeric] = self::indexOptions($command);
 		$arguments = $command->getArguments();
 		$occurrences = $extra = [];
 		$onlyPositional = false;
@@ -126,11 +126,19 @@ final class Parser
 
 			} elseif (
 				!$onlyPositional
-				&& !self::isOption($arg)
+				&& !self::isOption($arg, $numeric)
 				&& ($commands = $command->getCommands())
 			) {
 				$subcommand = array_values(array_filter($commands, fn(Command $candidate) => $candidate->name === $arg))[0] ?? null;
-				if (!$subcommand) {
+				if (!$subcommand && $arg !== '-' && str_starts_with($arg, '-')) { // a number such as -5, no command has such a name
+					$name = self::splitNameValue($arg)[0];
+					throw new ParseException(
+						self::describeUnknownOption($name, $command, $names + $negations),
+						$command,
+						reason: ParseFailure::UnknownOption,
+						token: $name,
+					);
+				} elseif (!$subcommand) {
 					$hint = self::suggest($arg, array_map(fn(Command $candidate) => (string) $candidate->name, $commands));
 					throw new ParseException(
 						'Unknown command '
@@ -144,11 +152,11 @@ final class Parser
 				}
 
 				$command = $subcommand;
-				[$names, $negations] = self::indexOptions($command);
+				[$names, $negations, $numeric] = self::indexOptions($command);
 				$arguments = $command->getArguments();
 				continue;
 
-			} elseif ($onlyPositional || !self::isOption($arg)) {
+			} elseif ($onlyPositional || !self::isOption($arg, $numeric)) {
 				$argument = current($arguments);
 				if (!$argument) {
 					$extra[] = $arg;
@@ -180,6 +188,11 @@ final class Parser
 
 			$option = $names[$name] ?? null;
 			if (!$option) {
+				if ($value === self::OptionPresent && ($bundle = self::expandBundle($name, $names)) !== null) {
+					array_splice($argv, $i, 0, $bundle); // replace -abc with -a -b -c and reprocess
+					continue;
+				}
+
 				throw new ParseException(
 					self::describeUnknownOption($name, $command, $names + $negations),
 					$command,
@@ -198,10 +211,13 @@ final class Parser
 				);
 
 			} elseif ($value === self::OptionPresent && $option instanceof Option) {
-				$next = isset($argv[$i]) && !self::isOption($argv[$i]) ? $argv[$i] : null;
+				$next = isset($argv[$i]) && !self::isOption($argv[$i], $numeric) ? $argv[$i] : null;
 				if (!$option->valueOptional) {
 					$value = $next ?? throw new ParseException(
-						'Option ' . HelpRenderer::formatCode($option->name) . ' requires a value.',
+						'Option ' . HelpRenderer::formatCode($option->name) . ' requires a value.'
+						. (preg_match('#^-\d#', $argv[$i] ?? '')
+							? ' A value starting with a dash is given as ' . HelpRenderer::formatCode("$option->name=$argv[$i]") . '.'
+							: ''),
 						$command,
 						reason: ParseFailure::MissingValue,
 						parameter: $option,
@@ -290,7 +306,8 @@ final class Parser
 
 	/**
 	 * Indexes the options valid at the command by name and by alias, and apart from them by the negation of a flag.
-	 * @return array{array<string, Flag|Option>, array<string, Flag>}
+	 * Also tells whether one of them is named like a negative number, such as -1.
+	 * @return array{array<string, Flag|Option>, array<string, Flag>, bool}
 	 */
 	private static function indexOptions(Command $command): array
 	{
@@ -308,7 +325,8 @@ final class Parser
 			}
 		}
 
-		return [$names, $negations];
+		$numeric = (bool) array_filter(array_keys($names), fn($name) => (bool) preg_match('#^-\d#', (string) $name));
+		return [$names, $negations, $numeric];
 	}
 
 
@@ -380,6 +398,35 @@ final class Parser
 	}
 
 
+	/**
+	 * Expands a bundle of short flags like -abc into ['-a', '-b', '-c'], or returns null when it is not a clean
+	 * bundle. Every character must be a defined single-letter flag; only the last one may take a value.
+	 * @param  array<string, Flag|Option>  $names
+	 * @return ?list<string>
+	 */
+	private static function expandBundle(string $token, array $names): ?array
+	{
+		if (!preg_match('#^-\w{2,}$#D', $token)) {
+			return null;
+		}
+
+		$chars = str_split(substr($token, 1));
+		$bundle = [];
+		foreach ($chars as $j => $char) {
+			$short = "-$char";
+			$option = $names[$short] ?? null;
+			$isLast = $j === count($chars) - 1;
+			if ($option === null || (!$isLast && !$option instanceof Flag)) {
+				return null;
+			}
+
+			$bundle[] = $short;
+		}
+
+		return $bundle;
+	}
+
+
 	private function normalizeValue(ValueParameter $parameter, string|true $value, Command $command): mixed
 	{
 		if ($value === self::OptionPresent) {
@@ -409,12 +456,18 @@ final class Parser
 
 
 	/**
-	 * Returns true if the token looks like an option, not a positional value. A lone "-" is a value by convention,
-	 * usually meaning stdin or stdout.
+	 * Returns true if the token looks like an option, not a positional value. A lone "-" is a value by convention
+	 * (usually meaning stdin/stdout), and so is a negative number such as -5 or -.5, unless an option is named like
+	 * a number, such as -1: then every -5 is an option, as in argparse.
+	 * @param  bool  $numeric  an option is named like a negative number
 	 */
-	private static function isOption(string $arg): bool
+	private static function isOption(string $arg, bool $numeric): bool
 	{
-		return $arg !== '' && $arg !== '-' && $arg[0] === '-';
+		if ($arg === '' || $arg === '-' || $arg[0] !== '-' || preg_match('#^-\.\d#', $arg)) {
+			return false;
+		}
+
+		return $numeric || !preg_match('#^-\d#', $arg);
 	}
 
 

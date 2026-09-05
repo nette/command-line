@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use Nette\CommandLine\{Command, Parser};
+use Nette\CommandLine\{Command, ParseException, Parser};
 use Tester\Assert;
 
 require __DIR__ . '/bootstrap.php';
@@ -80,4 +80,15 @@ test('wasProvided() and foreach know a numeric name', function () {
 	}
 
 	Assert::same(['-1', '-5', '0', '123'], $names);
+});
+
+
+test('a typo in a node with a numeric option is reported', function () {
+	$command = new Command;
+	$command->addFlag('-1');
+	Assert::exception(
+		fn() => (new Parser)->parse($command, ['--x']),
+		ParseException::class,
+		'Unknown option `--x`.',
+	);
 });
