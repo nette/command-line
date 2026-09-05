@@ -64,6 +64,10 @@ test('commands', function () {
 	Assert::null($e->parameter);
 	Assert::same('zzz', $e->token);
 
+	$e = Assert::exception(fn() => (new Parser)->parse($cli, ['-5']), ParseException::class);
+	Assert::same(ParseFailure::UnknownOption, $e->reason);
+	Assert::same('-5', $e->token);
+
 	$e = Assert::exception(fn() => (new Parser)->parse($check, ['fix']), ParseException::class);
 	Assert::same(ParseFailure::CommandMismatch, $e->reason);
 	Assert::null($e->token);

@@ -144,6 +144,27 @@ test('an empty string is a value', function () {
 });
 
 
+test('bundled short flags', function () {
+	$command = new Command;
+	$command->addFlag('--verbose', alias: '-v');
+	$command->addFlag('--all', alias: '-a');
+	$command->addOption('--output', alias: '-o');
+
+	Assert::equal(['--verbose' => true, '--all' => true, '--output' => null], parseArgs($command, ['-va']));
+	Assert::equal(['--verbose' => true, '--all' => true, '--output' => 'file.txt'], parseArgs($command, ['-vao', 'file.txt']));
+	Assert::exception(fn() => parseArgs($command, ['-vx']), ParseException::class, 'Unknown option `-vx`.%A%');
+	Assert::exception(fn() => parseArgs($command, ['-ov']), ParseException::class, 'Unknown option `-ov`.%A%');
+});
+
+
+test('a defined multi-letter short option is not a bundle', function () {
+	$command = new Command;
+	$command->addFlag('--verbose', alias: '-v');
+	$command->addFlag('--verify', alias: '-vf');
+	Assert::equal(['--verbose' => null, '--verify' => true], parseArgs($command, ['-vf']));
+});
+
+
 test('an unknown option suggests a close match', function () {
 	$command = new Command;
 	$command->addFlag('--verbose', alias: '-v');
@@ -171,6 +192,52 @@ test('a lone dash is a value', function () {
 	$command->addOption('--output', alias: '-o');
 	Assert::same(['input' => '-', '--output' => null], parseArgs($command, ['-']));
 	Assert::same(['--output' => '-', 'input' => null], parseArgs($command, ['-o', '-']));
+});
+
+
+test('a negative number is a value, unless an option is named like a number', function () {
+	$command = new Command;
+	$command->addOption('--count');
+	$command->addArgument('offset', optional: true);
+	Assert::same(['--count' => '-1', 'offset' => '-2.5'], parseArgs($command, ['--count', '-1', '-2.5']));
+	Assert::same(['--count' => '-.5', 'offset' => '-.25'], parseArgs($command, ['--count', '-.5', '-.25']));
+	Assert::same(['--count' => '-1e3', 'offset' => '-2h'], parseArgs($command, ['--count', '-1e3', '-2h']));
+
+	$command->addFlag('-1');
+	$command->addFlag('-2');
+	$command->addFlag('-h');
+	Assert::equal(['--count' => null, 'offset' => null, '-1' => true, '-2' => true, '-h' => null], parseArgs($command, ['-12']));
+	Assert::equal(['--count' => null, 'offset' => null, '-1' => null, '-2' => true, '-h' => true], parseArgs($command, ['-2h']));
+	Assert::same('-5', parseArgs($command, ['--count=-5'])['--count']);
+	Assert::same('-5', parseArgs($command, ['--', '-5'])['offset']);
+	Assert::same('-.5', parseArgs($command, ['--count', '-.5'])['--count']);
+	Assert::exception(
+		fn() => parseArgs($command, ['--count', '-5']),
+		ParseException::class,
+		'Option `--count` requires a value. A value starting with a dash is given as `--count=-5`.',
+	);
+	Assert::exception(fn() => parseArgs($command, ['-5']), ParseException::class, 'Unknown option `-5`.');
+
+	$command = new Command;
+	$command->addFlag('--one', alias: '-1');
+	$command->addArgument('offset', optional: true);
+	Assert::exception(fn() => parseArgs($command, ['-5']), ParseException::class, 'Unknown option `-5`.'); // an alias counts too
+});
+
+
+test('an option named like a number counts from the node that selects it', function () {
+	$command = new Command;
+	$calc = $command->addCommand('calc');
+	$calc->addFlag('-1');
+	$calc->addArgument('x', optional: true);
+	$other = $command->addCommand('other');
+	$other->addArgument('x', optional: true);
+	Assert::same('-5', parseArgs($command, ['other', '-5'])['x']);
+	Assert::exception(fn() => parseArgs($command, ['calc', '-5']), ParseException::class, 'Unknown option `-5`.');
+	Assert::exception(fn() => parseArgs($command, ['-1']), ParseException::class, 'Option `-1` belongs to command `calc`.');
+
+	$command->addFlag('-9'); // inherited by both commands
+	Assert::exception(fn() => parseArgs($command, ['other', '-5']), ParseException::class, 'Unknown option `-5`.');
 });
 
 
