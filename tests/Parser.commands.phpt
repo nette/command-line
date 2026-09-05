@@ -69,6 +69,23 @@ test('an option of another command says where it belongs', function () {
 });
 
 
+test('every command an option belongs to is named, but never a hidden option', function () {
+	$cli = new Command('tool');
+	$cli->addCommand('check')->addFlag('--diff');
+	$cli->addCommand('fix')->addFlag('--diff');
+	$cli->addCommand('debug')->addFlag('--trace', hidden: true);
+	$cli->addFlag('--secret-debug', hidden: true);
+	$cli->addFlag('--secret', hidden: true, negatable: true);
+	Assert::exception(fn() => (new Parser)->parse($cli, ['--diff']), ParseException::class, "Option --diff belongs to commands 'check' and 'fix'.");
+	Assert::exception(fn() => (new Parser)->parse($cli, ['--trace']), ParseException::class, 'Unknown option --trace.');
+	Assert::exception(fn() => (new Parser)->parse($cli, ['--secret-debag']), ParseException::class, 'Unknown option --secret-debag.');
+	Assert::exception(fn() => (new Parser)->parse($cli, ['--no-secrt']), ParseException::class, 'Unknown option --no-secrt.');
+
+	$cli->addCommand('lint')->addFlag('--diff');
+	Assert::exception(fn() => (new Parser)->parse($cli, ['--diff']), ParseException::class, "Option --diff belongs to commands 'check', 'fix' and 'lint'.");
+});
+
+
 test('the exception knows the command in which the line went wrong', function () {
 	$cli = app();
 	$e = Assert::exception(fn() => (new Parser)->parse($cli, ['explain']), ParseException::class, 'Missing required argument <rule>.');

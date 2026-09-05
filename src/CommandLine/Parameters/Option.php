@@ -26,19 +26,23 @@ final class Option extends ValueParameter
 		?string $description = null,
 		/** a short name such as -o */
 		public readonly ?string $alias = null,
+		/** the name of the value in the help, e.g. 'file' shows as --output <file>, and replaces the enum values there */
+		public readonly ?string $valueName = null,
 		/** the option may be used without its value, which then parses as true; the next token is its value only when it is one of the enum values */
 		public readonly bool $valueOptional = false,
 		array|string|null $enum = null,
 		?\Closure $normalizer = null,
 		mixed $default = null,
+		?string $defaultDescription = null,
 		bool $repeatable = false,
+		bool $hidden = false,
 	) {
 		NameSyntax::assertOptionName($name, $alias);
 		if ($alias === $name) {
 			throw new \InvalidArgumentException("Alias '$alias' of option $name is its name.");
 		}
 
-		parent::__construct($command, $name, $description, $enum, $normalizer, $default, $repeatable);
+		parent::__construct($command, $name, $description, $enum, $normalizer, $default, $defaultDescription, $repeatable, $hidden);
 	}
 
 

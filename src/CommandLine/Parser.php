@@ -300,7 +300,7 @@ final class Parser
 
 
 	/**
-	 * Names the commands that own an option of this name, or suggests a close one.
+	 * Names the commands that own an option of this name, or suggests a close one; a hidden option is never named.
 	 * @param  array<string|int, Flag|Option>  $known  the options valid at the command by their names, a numeric one as an integer
 	 */
 	private static function describeUnknownOption(string $name, Command $command, array $known): string
@@ -313,20 +313,21 @@ final class Parser
 				: "Option $name belongs to command $last.";
 		}
 
-		$hint = self::suggest($name, array_map(strval(...), array_keys($known)));
+		$visible = array_keys(array_filter($known, fn(Flag|Option $option) => !$option->hidden));
+		$hint = self::suggest($name, array_map(strval(...), $visible));
 		return 'Unknown option ' . self::escape($name) . '.' . ($hint === null ? '' : " Did you mean $hint?");
 	}
 
 
 	/**
-	 * Finds the commands in the tree that define an option by this name or alias.
+	 * Finds the commands in the tree that define a visible option by this name or alias.
 	 * @return list<Command>
 	 */
 	private static function findOwners(Command $command, string $name): array
 	{
 		$owners = [];
 		foreach ($command->getOptions() as $option) {
-			if ($option->hasName($name)) {
+			if (!$option->hidden && $option->hasName($name)) {
 				$owners[] = $command;
 				break;
 			}

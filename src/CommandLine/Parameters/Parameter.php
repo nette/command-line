@@ -22,8 +22,12 @@ abstract class Parameter
 		public readonly ?string $description = null,
 		/** what the parameter is worth when it is absent from the command line, never checked or converted */
 		public readonly mixed $default = null,
+		/** how the help shows the default: null derives it from a scalar value, a string puts it in words, a blank one leaves it out */
+		public readonly ?string $defaultDescription = null,
 		/** the values are collected into a list */
 		public readonly bool $repeatable = false,
+		/** left out of the help */
+		public readonly bool $hidden = false,
 	) {
 	}
 }
