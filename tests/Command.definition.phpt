@@ -94,6 +94,14 @@ test('commands form a tree', function () {
 });
 
 
+test('the settings that shape the help only', function () {
+	$option = (new Command)->addOption('--output', valueName: 'file', defaultDescription: 'current directory', hidden: true);
+	Assert::same('file', $option->valueName);
+	Assert::same('current directory', $option->defaultDescription);
+	Assert::true($option->hidden);
+});
+
+
 test('names', function () {
 	Assert::exception(
 		fn() => (new Command)->addFlag('verbose'),
@@ -246,7 +254,7 @@ test('arguments and subcommands exclude each other', function () {
 
 test('a command named like a value an optional value would take is refused', function () {
 	$program = new Command;
-	$program->addOption('--mode', valueOptional: true, enum: ['check']);
+	$program->addOption('--mode', valueOptional: true, enum: ['check'], hidden: true);
 	$program->addOption('--level', enum: ['fix']); // a required value takes the next token anyway, as expected
 	$remote = $program->addCommand('remote');
 	Assert::exception(
