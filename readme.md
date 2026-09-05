@@ -412,13 +412,14 @@ Colorful Output
 
 ```php
 $console = new Console;
-$console->writeLine($console->color('red', 'Error!'));
-$console->writeLine($console->color('white/blue', 'White text on blue background'));
+$console->writeLine('Error!', 'red');
+$console->writeLine('White text on blue background', 'white/blue');
+$console->writeLine($console->color('gray', 'Config  ') . $file); // a line of several colors is composed
 ```
 
 The console writes to `STDOUT` unless you give it another stream. An application that writes to both wants one console for each, so that a redirected output does not decide the colors of the other: `$out = new Console(STDOUT)` and `$err = new Console(STDERR)`.
 
-The color is `'foreground'` or `'foreground/background'`, one of `black`, `gray`, `silver`, `white`, `navy`, `blue`, `green`, `lime`, `teal`, `aqua`, `maroon`, `red`, `purple`, `fuchsia`, `olive` and `yellow`.
+The color is `'foreground'` or `'foreground/background'`, one of `black`, `gray`, `silver`, `white`, `navy`, `blue`, `green`, `lime`, `teal`, `aqua`, `maroon`, `red`, `purple`, `fuchsia`, `olive` and `yellow`. An unknown name throws, even when colors are off. `null` is no color at all, so `color($ok ? 'green' : null, $text)` needs no branch.
 
 Colors are used when the stream is a terminal, unless [NO_COLOR](https://no-color.org) or `FORCE_COLOR` says otherwise. Your `--no-color` option wins over both, either in the constructor or later:
 

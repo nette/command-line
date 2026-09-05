@@ -7,7 +7,7 @@
 
 namespace Nette\CommandLine;
 
-use function function_exists;
+use function count, function_exists;
 use const PHP_OS_FAMILY, PHP_SAPI;
 
 
@@ -16,6 +16,14 @@ use const PHP_OS_FAMILY, PHP_SAPI;
  */
 final class Console
 {
+	/** @var array<string, int>  aixterm SGR codes: foreground 30-37 (dark) / 90-97 (bright), background = foreground + 10 */
+	private const Colors = [
+		'black' => 30, 'gray' => 90, 'silver' => 37, 'white' => 97,
+		'navy' => 34, 'blue' => 94, 'green' => 32, 'lime' => 92,
+		'teal' => 36, 'aqua' => 96, 'maroon' => 31, 'red' => 91,
+		'purple' => 35, 'fuchsia' => 95, 'olive' => 33, 'yellow' => 93,
+	];
+
 	/** @var resource */
 	private $stream;
 	private bool $colors;
@@ -37,47 +45,43 @@ final class Console
 
 
 	/**
-	 * Writes the text as it is. What comes from elsewhere and may carry colors this console must not
-	 * pass on is filtered by the caller with Ansi::strip().
+	 * Writes the text as it is, in the color when one is given. What comes from elsewhere and may carry
+	 * colors this console must not pass on is filtered by the caller with Ansi::strip().
 	 */
-	public function write(string $text): void
+	public function write(string $text, ?string $color = null): void
 	{
-		fwrite($this->stream, $text);
+		fwrite($this->stream, $this->color($color, $text));
 	}
 
 
-	public function writeLine(string $text = ''): void
+	public function writeLine(string $text = '', ?string $color = null): void
 	{
-		$this->write($text . "\n");
+		$this->write($this->color($color, $text) . "\n");
 	}
 
 
 	/**
-	 * Wraps string in ANSI color codes, or returns plain string when colors are disabled.
-	 * Color format: 'foreground' or 'foreground/background' (e.g. 'red', 'white/blue').
-	 * When $s is null, emits the escape code without a reset sequence.
-	 * Available colors: black, gray, silver, white, navy, blue, green, lime,
-	 * teal, aqua, maroon, red, purple, fuchsia, olive, yellow.
+	 * Colors the text, or returns it as it is when the color is null or colors are off. The color is 'foreground'
+	 * or 'foreground/background' (e.g. 'red', 'white/blue'), one of black, gray, silver, white, navy, blue, green,
+	 * lime, teal, aqua, maroon, red, purple, fuchsia, olive and yellow.
+	 * @throws \InvalidArgumentException  on an unknown color name
 	 */
-	public function color(?string $color, ?string $s = null): string
+	public function color(?string $color, string $text): string
 	{
-		$colors = [
-			'black' => '0;30', 'gray' => '1;30', 'silver' => '0;37', 'white' => '1;37',
-			'navy' => '0;34', 'blue' => '1;34', 'green' => '0;32', 'lime' => '1;32',
-			'teal' => '0;36', 'aqua' => '1;36', 'maroon' => '0;31', 'red' => '1;31',
-			'purple' => '0;35', 'fuchsia' => '1;35', 'olive' => '0;33', 'yellow' => '1;33',
-			'' => '0',
-		];
-		if ($this->colors) {
-			$c = explode('/', $color ?: '/');
-			return "\033["
-				. ($c[0] ? $colors[$c[0]] : '')
-				. (empty($c[1]) ? '' : ';4' . substr($colors[$c[1]], -1))
-				. 'm' . $s
-				. ($s === null ? '' : "\033[0m");
+		$names = $color === null ? [] : explode('/', $color);
+		if (count($names) > 2 || in_array('', $names, true)) {
+			throw new \InvalidArgumentException("Color '$color' is a foreground name, or 'foreground/background'.");
 		}
 
-		return (string) $s;
+		$codes = [];
+		foreach ($names as $i => $name) {
+			$codes[] = (self::Colors[$name] ?? throw new \InvalidArgumentException("Unknown color '$name'."))
+				+ ($i ? 10 : 0); // the background is the foreground code plus ten
+		}
+
+		return $codes && $this->colors
+			? "\e[" . implode(';', $codes) . 'm' . $text . "\e[0m"
+			: $text;
 	}
 
 

@@ -1,58 +1,58 @@
-[1;33mUsage:[0m imagic [options] [command]
+[93mUsage:[0m imagic [options] [command]
 
 Converts and resizes images.
 
-[1;33mOptions:[0m
-  [1;32m-h, --help[0m                 Print this help
-  [1;32m-c, --config[0m [1;36m<file>[0m        Configuration file [1;30m(default:
+[93mOptions:[0m
+  [92m-h, --help[0m                 Print this help
+  [92m-c, --config[0m [96m<file>[0m        Configuration file [90m(default:
                              imagic.neon in the current
                              directory)[0m
 
-[1;33mCommands:[0m
-  [1;32mconvert[0m [1;32m<source>[0m [1;32m[target][0m  Converts images from one format
+[93mCommands:[0m
+  [92mconvert[0m [92m<source>[0m [92m[target][0m  Converts images from one format
                              to another
-  [1;32mremote[0m                     Manages remote storages
+  [92mremote[0m                     Manages remote storages
 
 ----
 
-[1;33mUsage:[0m imagic convert [options] <source> [target]
+[93mUsage:[0m imagic convert [options] <source> [target]
 
 Converts images from one format to another
 
-[1;33mOptions:[0m
-  [1;32m--overwrite[0m          Replace the files that already exist
+[93mOptions:[0m
+  [92m--overwrite[0m          Replace the files that already exist
 
-[1;33mArguments:[0m
-  [1;32m<source>[0m             Obrázek ke konverzi, třeba fotka z
+[93mArguments:[0m
+  [92m<source>[0m             Obrázek ke konverzi, třeba fotka z
                        dovolené
 
-[1;33mOptions:[0m
-  [1;32m--format[0m [1;36m<png|jpeg>[0m  Format of the result [1;30m(default: png)[0m
+[93mOptions:[0m
+  [92m--format[0m [96m<png|jpeg>[0m  Format of the result [90m(default: png)[0m
 
-[1;33mArguments:[0m
-  [1;32m[target][0m             Where to write the result
+[93mArguments:[0m
+  [92m[target][0m             Where to write the result
 
-[1;33mOptions:[0m
-  [1;32m--quality[0m [1;36m<jakóst>[0m   Kvalita výsledku [1;30m(default: 90)[0m
-  [1;32m--a-very-long-option-name-indeed[0m[1;36m[=value][0m
+[93mOptions:[0m
+  [92m--quality[0m [96m<jakóst>[0m   Kvalita výsledku [90m(default: 90)[0m
+  [92m--a-very-long-option-name-indeed[0m[96m[=value][0m
                        An option whose syntax does not fit
                        the column
 
-[1;33mGlobal options:[0m
-  [1;32m-h, --help[0m           Print this help
-  [1;32m-c, --config[0m [1;36m<file>[0m  Configuration file [1;30m(default:
+[93mGlobal options:[0m
+  [92m-h, --help[0m           Print this help
+  [92m-c, --config[0m [96m<file>[0m  Configuration file [90m(default:
                        imagic.neon in the current directory)[0m
 
 ----
 
-[1;33mUsage:[0m imagic remote add [options] <name>
+[93mUsage:[0m imagic remote add [options] <name>
 
 Adds a storage
 
-[1;33mArguments:[0m
-  [1;32m<name>[0m               Name of the storage
+[93mArguments:[0m
+  [92m<name>[0m               Name of the storage
 
-[1;33mOptions:[0m
-  [1;32m-h, --help[0m           Print this help
-  [1;32m-c, --config[0m [1;36m<file>[0m  Configuration file [1;30m(default:
+[93mOptions:[0m
+  [92m-h, --help[0m           Print this help
+  [92m-c, --config[0m [96m<file>[0m  Configuration file [90m(default:
                        imagic.neon in the current directory)[0m

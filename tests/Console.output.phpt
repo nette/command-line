@@ -21,6 +21,16 @@ test('write goes to the given stream', function () {
 });
 
 
+test('a color of the whole text is given to the writing', function () {
+	$stream = fopen('php://memory', 'w+');
+	$console = new Console($stream, colors: true);
+	$console->writeLine('done', 'green');
+	$console->write('half', 'red');
+	rewind($stream);
+	Assert::same("\e[32mdone\e[0m\n\e[91mhalf\e[0m", stream_get_contents($stream));
+});
+
+
 test('the text is written as it is, so what is data stays data', function () {
 	foreach ([true, false] as $colors) {
 		$stream = fopen('php://memory', 'w+');
@@ -48,6 +58,10 @@ test('a stream that is not a terminal gets no colors', function () {
 	Assert::false($console->isTerminal());
 	Assert::false($console->hasColors());
 	Assert::same('plain', $console->color('red', 'plain'));
+
+	$console->useColors(true);
+	Assert::true($console->hasColors());
+	Assert::same("\e[91mplain\e[0m", $console->color('red', 'plain'));
 });
 
 

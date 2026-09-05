@@ -175,6 +175,8 @@ the second: a user may set `NO_COLOR` and still be on a real terminal.
   nothing, because it cannot tell text from the content of a file, and stripping the one would
   silently corrupt the other. A caller printing a text from elsewhere (the output of a
   subprocess) drops its colors with `Ansi::strip()`, which is the rare case and the visible one.
+- **`color()` refuses an unknown name even when colors are off**, so a typo cannot wait for a
+  terminal to show up. A `null` color is no color at all, which spares the caller a branch.
 - `getWidth()` reads `COLUMNS` **every time**, which is how a narrow terminal is simulated in
   tests, and takes it only as a positive integer. Otherwise the terminal is asked only when the
   stream is one, so the help sent to STDERR follows STDERR; that answer is cached for the
