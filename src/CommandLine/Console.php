@@ -135,15 +135,19 @@ final class Console
 
 
 	/**
-	 * Detects whether the terminal supports ANSI colors.
-	 * Returns false when NO_COLOR is set, or when not running in a CLI TTY.
-	 * FORCE_COLOR overrides the TTY check.
+	 * A terminal takes colors, unless NO_COLOR says otherwise (https://no-color.org); FORCE_COLOR decides
+	 * whatever the stream is. Outside a CLI nothing does, so that no escape sequence reaches a page.
 	 */
 	private static function detectColors(bool $terminal): bool
 	{
-		return (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg')
-			&& getenv('NO_COLOR') === false // https://no-color.org
-			&& (getenv('FORCE_COLOR') || $terminal);
+		if ((PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') || (string) getenv('NO_COLOR') !== '') {
+			return false;
+		}
+
+		$force = getenv('FORCE_COLOR');
+		return $force === false || $force === ''
+			? $terminal
+			: $force !== '0' && strtolower($force) !== 'false';
 	}
 
 
