@@ -7,9 +7,9 @@
 
 namespace Nette\CommandLine;
 
-use Nette\CommandLine\Help\Section;
+use Nette\CommandLine\Help\{Section, Text};
 use Nette\CommandLine\Parameters\{Argument, Flag, Option, Parameter};
-use function is_bool, is_scalar, strlen;
+use function count, is_bool, is_scalar, strlen;
 
 
 /**
@@ -35,8 +35,8 @@ final class HelpRenderer
 
 	/**
 	 * Without a console, render() writes to a new one on STDOUT and renderToString() returns plain text.
-	 * Descriptions are wrapped to the width, the terminal's when none is given; the usage, a long syntax or a long
-	 * word overflows.
+	 * Descriptions are wrapped to the width, the terminal's when none is given; the usage, a text, a long syntax or a
+	 * long word overflows.
 	 */
 	public function __construct(
 		private readonly ?Console $console = null,
@@ -75,20 +75,25 @@ final class HelpRenderer
 			}
 
 			$blocks[] = implode("\n", $block);
-			$block = [$this->style('heading', $item->title . ':')];
+			$block = $item instanceof Section
+				? [$this->style('heading', $item->title . ':')]
+				: [];
+			if ($item instanceof Text) {
+				$blocks[] = $item->text;
+			}
 		}
 
 		$blocks[] = implode("\n", $block);
-		$usage = $this->style('heading', 'Usage:') . ' ' . $this->generateUsage($command);
+		$usage = $this->renderUsage($command->usage ?? [$this->generateUsage($command)]);
 		$description = implode("\n", $this->wrap($this->describe($command), $width));
 		return implode("\n\n", array_filter([$usage, $description, ...$blocks], fn($s) => $s !== '')) . "\n";
 	}
 
 
 	/**
-	 * The items of the command without the hidden parameters, with a heading in front of every run of items of one
-	 * kind, followed by the options it inherits from the commands above.
-	 * @return list<Flag|Option|Argument|Command|Section>
+	 * The items of the command without the hidden parameters, with headings where the author wrote none,
+	 * followed by the options it inherits from the commands above.
+	 * @return list<Flag|Option|Argument|Command|Section|Text>
 	 */
 	private static function collectItems(Command $command): array
 	{
@@ -116,21 +121,29 @@ final class HelpRenderer
 
 
 	/**
-	 * Puts an "Options:", "Arguments:" or "Commands:" heading in front of every run of items of one kind.
-	 * @param  list<Flag|Option|Argument|Command>  $items
-	 * @return list<Flag|Option|Argument|Command|Section>
+	 * Puts an "Options:", "Arguments:" or "Commands:" heading in front of every run of items of one kind, but only
+	 * when the author wrote no heading at all; one of their own means they arrange the help.
+	 * @param  list<Flag|Option|Argument|Command|Section|Text>  $items
+	 * @return list<Flag|Option|Argument|Command|Section|Text>
 	 */
 	private static function withHeadings(array $items): array
 	{
+		foreach ($items as $item) {
+			if ($item instanceof Section) {
+				return $items;
+			}
+		}
+
 		$out = [];
 		$last = null;
 		foreach ($items as $item) {
 			$heading = match (true) {
 				$item instanceof Flag, $item instanceof Option => 'Options',
 				$item instanceof Argument => 'Arguments',
-				default => 'Commands',
+				$item instanceof Command => 'Commands',
+				default => null,
 			};
-			if ($heading !== $last) {
+			if ($heading !== null && $heading !== $last) {
 				$last = $heading;
 				$out[] = new Section($heading);
 			}
@@ -139,6 +152,16 @@ final class HelpRenderer
 		}
 
 		return $out;
+	}
+
+
+	/** @param  list<string>  $lines */
+	private function renderUsage(array $lines): string
+	{
+		$heading = $this->style('heading', 'Usage:');
+		return count($lines) === 1
+			? "$heading " . $lines[0]
+			: "$heading\n" . implode("\n", array_map(fn($line) => self::Indent . $line, $lines));
 	}
 
 
@@ -325,7 +348,7 @@ final class HelpRenderer
 	/**
 	 * The column is as wide as the longest syntax that still fits into it; a longer one
 	 * gets a line of its own and must not stretch the column for everybody else.
-	 * @param  list<Flag|Option|Argument|Command|Section>  $items
+	 * @param  list<Flag|Option|Argument|Command|Section|Text>  $items
 	 */
 	private function syntaxWidth(array $items): int
 	{
