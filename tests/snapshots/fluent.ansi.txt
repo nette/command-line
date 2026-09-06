@@ -1,0 +1,58 @@
+[38;5;179mUsage:[0m [38;5;114mimagic[0m [38;5;110m[options][0m [38;5;114m[command][0m
+
+Converts and resizes images.
+
+[38;5;179mOptions:[0m
+  [38;5;110m-h, --help[0m                 Print this help
+  [38;5;110m-c, --config[0m [38;5;174m<file>[0m        Configuration file [38;5;243m(default:[0m
+                             [38;5;243mimagic.neon in the current[0m
+                             [38;5;243mdirectory)[0m
+
+[38;5;179mCommands:[0m
+  [38;5;114mconvert[0m [38;5;174m<source>[0m [38;5;174m[target][0m  Converts images from one format
+                             to another
+  [38;5;114mremote[0m                     Manages remote storages
+
+----
+
+[38;5;179mUsage:[0m [38;5;114mimagic[0m [38;5;114mconvert[0m [38;5;110m[options][0m [38;5;174m<source>[0m [38;5;174m[target][0m
+
+Converts images from one format to another
+
+[38;5;179mOptions:[0m
+  [38;5;110m--overwrite[0m          Replace the files that already exist
+
+[38;5;179mArguments:[0m
+  [38;5;174m<source>[0m             Obrázek ke konverzi, třeba fotka z
+                       dovolené
+
+[38;5;179mOptions:[0m
+  [38;5;110m--format[0m [38;5;174m<png|jpeg>[0m  Format of the result [38;5;243m(default: png)[0m
+
+[38;5;179mArguments:[0m
+  [38;5;174m[target][0m             Where to write the result
+
+[38;5;179mOptions:[0m
+  [38;5;110m--quality[0m [38;5;174m<jakóst>[0m   Kvalita výsledku [38;5;243m(default: 90)[0m
+  [38;5;110m--a-very-long-option-name-indeed[0m[38;5;174m[=value][0m
+                       An option whose syntax does not fit
+                       the column
+
+[38;5;179mGlobal options:[0m
+  [38;5;110m-h, --help[0m           Print this help
+  [38;5;110m-c, --config[0m [38;5;174m<file>[0m  Configuration file [38;5;243m(default:[0m
+                       [38;5;243mimagic.neon in the current directory)[0m
+
+----
+
+[38;5;179mUsage:[0m [38;5;114mimagic[0m [38;5;114mremote add[0m [38;5;110m[options][0m [38;5;174m<name>[0m
+
+Adds a storage
+
+[38;5;179mArguments:[0m
+  [38;5;174m<name>[0m               Name of the storage
+
+[38;5;179mOptions:[0m
+  [38;5;110m-h, --help[0m           Print this help
+  [38;5;110m-c, --config[0m [38;5;174m<file>[0m  Configuration file [38;5;243m(default:[0m
+                       [38;5;243mimagic.neon in the current directory)[0m
