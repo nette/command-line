@@ -88,6 +88,14 @@ final class Console
 	public function useColors(bool $state): void
 	{
 		$this->colors = $state;
+		if (
+			$state
+			&& PHP_OS_FAMILY === 'Windows'
+			&& function_exists('sapi_windows_vt100_support')
+			&& @stream_isatty($this->stream) // @ may trigger error 'cannot cast a filtered stream on this system'
+		) {
+			sapi_windows_vt100_support($this->stream, true);
+		}
 	}
 
 

@@ -90,3 +90,15 @@ test('COLUMNS counts only when it is a positive integer', function () {
 
 	putenv('COLUMNS');
 });
+
+
+test('the Windows branch turns VT100 on only for a terminal', function () {
+	if (PHP_OS_FAMILY !== 'Windows') {
+		Tester\Environment::skip('Windows only.');
+	}
+
+	$stream = fopen('php://memory', 'w+');
+	$console = new Console($stream);
+	$console->useColors(true); // must not try to switch VT100 on for a memory stream
+	Assert::same("\e[91mred\e[0m", $console->color('red', 'red'));
+});
