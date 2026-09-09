@@ -14,7 +14,8 @@ use function count, is_bool, is_scalar, strlen;
 
 /**
  * Draws the help of a command. The colored output is the plain one wrapped in escape
- * sequences, so stripping them gives the plain one back.
+ * sequences, so stripping them gives the plain one back, only without the backticks of the code
+ * a description or a text writes as Markdown does, which the color takes the place of.
  */
 final class HelpRenderer
 {
@@ -26,6 +27,7 @@ final class HelpRenderer
 		'command' => '#87D787',
 		'value' => '#D78787',
 		'default' => '#767676', // also the dots of a repeatable parameter
+		'code' => '#87D7FF', // written in backticks in a description or a text
 	];
 
 	private const MaxSyntaxWidth = 28;
@@ -79,7 +81,9 @@ final class HelpRenderer
 				? [$this->style('heading', $item->title . ':')]
 				: [];
 			if ($item instanceof Text) {
-				$blocks[] = $item->text;
+				$blocks[] = $this->console?->hasColors()
+					? implode('', array_map(fn(array $piece) => $piece[1] ? $this->style('code', $piece[0]) : $piece[0], self::splitCodeSpans($item->text)))
+					: $item->text;
 			}
 		}
 
@@ -260,25 +264,63 @@ final class HelpRenderer
 
 
 	/**
-	 * The words of the description as it is printed, each with its role, including the "(default: x)" clause when
-	 * one is due. Runs of whitespace collapse, since the description lives in a column.
-	 * @return list<array{string, ?string}>
+	 * The words of the description as it is printed, including the "(default: x)" clause when one is due.
+	 * @return list<list<array{string, ?string}>>
 	 */
 	private function describe(Parameter|Command $item): array
 	{
-		$words = [];
-		foreach (preg_split('#\s+#', (string) $item->description, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $word) {
-			$words[] = [$word, null];
-		}
-
 		$default = $item instanceof Parameter ? self::describeDefault($item) : null;
-		if ($default !== null) {
-			foreach (preg_split('#\s+#', "(default: $default)") as $word) {
-				$words[] = [$word, 'default'];
+		return [
+			...$this->splitWords((string) $item->description, null),
+			...($default === null ? [] : $this->splitWords("(default: $default)", 'default')),
+		];
+	}
+
+
+	/**
+	 * Splits the text into words, each a list of pieces with their role, so that code written in backticks holds the
+	 * role of code even beside a comma. Runs of whitespace collapse, since a description lives in a column. Without
+	 * colors the backticks stay, so that a pipe still tells the code from the words.
+	 * @return list<list<array{string, ?string}>>
+	 */
+	private function splitWords(string $text, ?string $role): array
+	{
+		$words = [[]];
+		$pieces = $this->console?->hasColors() ? self::splitCodeSpans($text) : [[$text, false]];
+		foreach ($pieces as [$piece, $code]) {
+			foreach (preg_split('#(\s+)#', $piece, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [] as $i => $part) {
+				if ($i % 2) { // whitespace ends a word
+					$words[] = [];
+				} elseif ($part !== '') {
+					$words[array_key_last($words)][] = [$part, $code ? 'code' : $role];
+				}
 			}
 		}
 
-		return $words;
+		return array_values(array_filter($words));
+	}
+
+
+	/**
+	 * Splits the text at the code spans of Markdown into pieces of text and of code, the code without its backticks.
+	 * A span closes with a run of as many backticks as opened it, so code holding a backtick is written in a longer
+	 * run, and one space padding both sides of the code is dropped; a span does not cross a line.
+	 * @return list<array{string, bool}>  the piece and whether it is code
+	 * @internal
+	 */
+	public static function splitCodeSpans(string $text): array
+	{
+		$parts = preg_split('~(?<!`)(`+)(?!`)([^\n]*?[^`\n])\1(?!`)~', $text, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
+		$pieces = [];
+		foreach ($parts as $i => $part) {
+			if ($i % 3 === 2) {
+				$pieces[] = [preg_match('~^ (.*\S.*) $~', $part, $m) ? $m[1] : $part, true];
+			} elseif ($i % 3 === 0 && $part !== '') {
+				$pieces[] = [$part, false];
+			}
+		}
+
+		return $pieces;
 	}
 
 
@@ -302,22 +344,22 @@ final class HelpRenderer
 	/**
 	 * Breaks the words into lines of at most the given visible width and colors each run of one role. A word longer
 	 * than the line is left to overflow rather than cut in half.
-	 * @param  list<array{string, ?string}>  $words
+	 * @param  list<list<array{string, ?string}>>  $words
 	 * @return list<string>
 	 */
 	private function wrap(array $words, int $width): array
 	{
 		$lines = $line = [];
 		$lineWidth = 0;
-		foreach ($words as [$word, $role]) {
-			$wordWidth = Ansi::measure($word);
+		foreach ($words as $word) {
+			$wordWidth = Ansi::measure(implode('', array_column($word, 0)));
 			if ($line && $lineWidth + 1 + $wordWidth > $width) {
 				$lines[] = $this->joinWords($line);
 				$line = [];
 			}
 
 			$lineWidth = $line ? $lineWidth + 1 + $wordWidth : $wordWidth;
-			$line[] = [$word, $role];
+			$line[] = $word;
 		}
 
 		$lines[] = $this->joinWords($line);
@@ -326,22 +368,34 @@ final class HelpRenderer
 
 
 	/**
-	 * Joins the words of a line, a run of one role colored as a whole, so a color never spans two lines.
-	 * @param  list<array{string, ?string}>  $words
+	 * Joins the words of a line, a run of one role colored as a whole, so a color never spans two lines; the space
+	 * between two words belongs to the run only when both sides of it are in its role.
+	 * @param  list<list<array{string, ?string}>>  $words
 	 */
 	private function joinWords(array $words): string
 	{
 		$runs = [];
-		foreach ($words as [$word, $role]) {
+		$append = function (string $text, ?string $role) use (&$runs): void {
 			$last = array_key_last($runs);
 			if ($last !== null && $runs[$last][1] === $role) {
-				$runs[$last][0] .= " $word";
+				$runs[$last][0] .= $text;
 			} else {
-				$runs[] = [$word, $role];
+				$runs[] = [$text, $role];
+			}
+		};
+		$previous = false; // the role of the piece before, false at the start of the line
+		foreach ($words as $word) {
+			foreach ($word as $j => [$text, $role]) {
+				if ($j === 0 && $previous !== false) {
+					$append(' ', $previous === $role ? $role : null);
+				}
+
+				$append($text, $role);
+				$previous = $role;
 			}
 		}
 
-		return implode(' ', array_map(fn(array $run) => $run[1] === null ? $run[0] : $this->style($run[1], $run[0]), $runs));
+		return implode('', array_map(fn(array $run) => $run[1] === null ? $run[0] : $this->style($run[1], $run[0]), $runs));
 	}
 
 

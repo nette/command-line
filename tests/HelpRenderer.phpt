@@ -270,6 +270,56 @@ test('a colored help is the plain one in escape sequences', function () {
 });
 
 
+test('the code in backticks is drawn in color without them, and kept as it is in the plain help', function () {
+	$command = new Command('tool', 'Reads `tool.neon` first');
+	$command->addOption('--rule', 'enable a rule: `name=on` or `name=off`, like ``a `b` c``');
+	$command->addText('Exit codes: `0` clean.');
+
+	$plain = renderHelp($command);
+	Assert::contains('enable a rule: `name=on` or `name=off`, like ``a `b` c``', $plain);
+	Assert::contains('Exit codes: `0` clean.', $plain);
+
+	$colored = renderHelp($command, colors: true);
+	Assert::contains("Reads \e[38;5;117mtool.neon\e[0m first", $colored);
+	Assert::contains("\e[38;5;117mname=on\e[0m or \e[38;5;117mname=off\e[0m, like \e[38;5;117ma `b` c\e[0m", $colored);
+	Assert::contains("Exit codes: \e[38;5;117m0\e[0m clean.", $colored);
+	Assert::same( // stripping the colors gives the plain help without the backticks of the code
+		strtr($plain, ['``a `b` c``' => 'a `b` c', '`' => '']),
+		preg_replace('#\e\[[\d;]*m#', '', $colored),
+	);
+});
+
+
+test('a span of code breaks across lines like the words around it, and a default holds code too', function () {
+	$command = new Command('tool');
+	$command->addOption('--format', 'the output as `json pretty printed` for a tool', defaultDescription: 'the value of `format`');
+
+	Assert::same(
+		"Usage: tool [options]\n"
+		. "\n"
+		. "Options:\n"
+		. "  --format <value>  the output as json\n"
+		. "                    pretty printed for a\n"
+		. "                    tool (default: the\n"
+		. "                    value of format)\n",
+		preg_replace('#\e\[[\d;]*m#', '', renderHelp($command, width: 40, colors: true)),
+	);
+	Assert::contains("\e[38;5;117mjson\e[0m", renderHelp($command, width: 40, colors: true));
+	Assert::contains("\e[38;5;117mpretty printed\e[0m", renderHelp($command, width: 40, colors: true));
+	Assert::contains("\e[38;5;243m(default: the value of\e[0m \e[38;5;117mformat\e[0m\e[38;5;243m)\e[0m", renderHelp($command, width: 200, colors: true));
+});
+
+
+test('splitCodeSpans() cuts the text at the code spans of Markdown and drops their backticks', function () {
+	Assert::same([['Run ', false], ['init', true], [', then ', false], ['fix', true]], HelpRenderer::splitCodeSpans('Run `init`, then `fix`'));
+	Assert::same([['a `b` c', true]], HelpRenderer::splitCodeSpans('``a `b` c``')); // a longer run holds a backtick
+	Assert::same([['`b`', true]], HelpRenderer::splitCodeSpans('`` `b` ``')); // one padding space each side is dropped
+	Assert::same([['a lone ` stays', false]], HelpRenderer::splitCodeSpans('a lone ` stays'));
+	Assert::same([["a ` across\na line `", false]], HelpRenderer::splitCodeSpans("a ` across\na line `")); // a span stays on its line
+	Assert::same([], HelpRenderer::splitCodeSpans(''));
+});
+
+
 test('renderToString() without a console draws any command plain', function () {
 	$renderer = new HelpRenderer(width: 80);
 	Assert::same(renderHelp(app()), $renderer->renderToString(app()));
