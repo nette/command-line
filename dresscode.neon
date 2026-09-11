@@ -1,0 +1,18 @@
+presets:
+	- nette
+
+paths:
+	- src
+	- tests
+
+excludePaths:
+	- fixtures*
+
+fileExtensions:
+	- php
+	- phpt
+
+overrides:
+	- paths: [src]
+	  presets: [optimizations]
+	  nameResolution: certain
