@@ -24,6 +24,9 @@ final class Command
 	/** the command line has to name one of the commands below, unless a standalone flag answers */
 	public readonly bool $commandRequired;
 
+	/** what ParseResult::run() calls when the command line runs this command */
+	public readonly ?\Closure $handler;
+
 	private ?self $parent = null;
 
 	/** @var list<Flag|Option|Argument|self|Section|Text>  in the order the help shows them */
@@ -32,15 +35,21 @@ final class Command
 
 	/**
 	 * @param  string|list<string>|null  $usage
+	 * @param  ?\Closure  $handler  what ParseResult::run() calls when the command line runs this command
 	 */
 	public function __construct(
 		public readonly ?string $name = null,
 		public readonly ?string $description = null,
 		string|array|null $usage = null,
 		bool $commandRequired = false,
+		?\Closure $handler = null,
 	) {
 		$this->usage = is_string($usage) ? [$usage] : $usage;
 		$this->commandRequired = $commandRequired;
+		$this->handler = $handler;
+		if ($handler !== null) {
+			HandlerBinding::checkSignature($handler);
+		}
 	}
 
 
@@ -154,12 +163,14 @@ final class Command
 	 * Adds a command such as check in "tool check src". It inherits the options of this command.
 	 * @param  string|list<string>|null  $usage  the usage line(s) written by hand; null generates them from the definitions
 	 * @param  bool  $commandRequired  the command line has to name one of the commands below, unless a standalone flag answers
+	 * @param  ?\Closure  $handler  what ParseResult::run() calls when the command line runs this command
 	 */
 	public function addCommand(
 		string $name,
 		?string $description = null,
 		string|array|null $usage = null,
 		bool $commandRequired = false,
+		?\Closure $handler = null,
 	): self
 	{
 		return $this->attach(new self(...func_get_args()));

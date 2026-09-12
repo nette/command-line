@@ -3,3 +3,10 @@ parameters:
 
 	paths:
 		- src
+
+	ignoreErrors:
+		-   # a handler takes any parameters, which it binds by name; a signature would only refuse them at call sites
+			identifier: missingType.callable
+			paths:
+				- src/CommandLine/Command.php
+				- src/CommandLine/HandlerBinding.php

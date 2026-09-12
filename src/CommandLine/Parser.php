@@ -27,6 +27,8 @@ final class Parser
 	public function parse(Command $command, ?array $argv = null): ParseResult
 	{
 		$argv ??= array_values(array_map(strval(...), array_slice((array) ($_SERVER['argv'] ?? []), 1)));
+		HandlerBinding::checkTree($command->getRoot()); // an input a handler binds to may be added after the handler
+
 		[$selected, $occurrences] = $this->collect($command->getRoot(), $argv);
 		if (!in_array($command, $selected->getPath(), true)) {
 			throw new ParseException(
@@ -51,7 +53,7 @@ final class Parser
 			)
 			: $this->complete($parameters, $this->evaluate($parameters, $occurrences, $selected));
 
-		return new ParseResult($selected, $values, array_fill_keys(array_keys($occurrences), true), $argv === []);
+		return new ParseResult($selected, $values, array_fill_keys(array_keys($occurrences), true), $argv === [], (bool) $standalone);
 	}
 
 

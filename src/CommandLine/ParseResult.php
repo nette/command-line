@@ -24,6 +24,8 @@ final readonly class ParseResult implements \IteratorAggregate
 		/** @var array<string, true>  names of the parameters that occurred on the command line */
 		private array $provided = [],
 		private bool $empty = false,
+		/** a standalone flag answered, so the arguments were neither demanded nor converted */
+		private bool $standalone = false,
 	) {
 	}
 
@@ -64,6 +66,20 @@ final readonly class ParseResult implements \IteratorAggregate
 	public function toArray(): array
 	{
 		return $this->values;
+	}
+
+
+	/**
+	 * Runs the handler of the command and returns its exit code, 0 when it returns nothing. Its parameters get the
+	 * input they are named after, $maxWarnings the option --max-warnings, or this result or the command by type.
+	 */
+	public function run(): int
+	{
+		if ($this->standalone) {
+			throw new \LogicException('A standalone flag answered, so there is nothing to run; handle it before calling run().');
+		}
+
+		return HandlerBinding::invoke($this);
 	}
 
 
