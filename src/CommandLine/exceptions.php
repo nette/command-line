@@ -11,7 +11,8 @@ use Nette\CommandLine\Parameters\Parameter;
 
 
 /**
- * The command line is used wrongly; the message writes code in backticks.
+ * The command line is used wrongly. A handler throws it when the inputs conflict or do not fit the context; the
+ * message writes code in backticks.
  */
 class UsageException extends \Exception
 {
