@@ -7,5 +7,6 @@ phpstan*.neon   export-ignore
 docs/           export-ignore
 tests/          export-ignore
 
+*               text=auto
 *.php*          diff=php
 *.sh            text eol=lf
