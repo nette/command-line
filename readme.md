@@ -446,3 +446,9 @@ Ansi::pad($console->color('red', 'chyba'), 10);   // padded to 10 columns, not t
 Ansi::truncate($path, 30, keepEnd: true);         // cuts the front, so the file name stays
 Ansi::strip($text);                               // the text without any escape sequence
 ```
+
+
+Upgrading from 1.x
+==================
+
+Version 2.0 is a new API without a compatibility layer. The package ships an agent skill that rewrites 1.x code to 2.0 faithfully and reports every place where 2.0 behaves differently. Point your coding agent at `vendor/nette/command-line/docs/skills/nette-command-line-upgrade/SKILL.md`, or read it [on GitHub](docs/skills/nette-command-line-upgrade/SKILL.md).
