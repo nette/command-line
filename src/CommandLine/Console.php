@@ -7,6 +7,8 @@
 
 namespace Nette\CommandLine;
 
+use const PHP_SAPI;
+
 
 /**
  * Stupid console writer.
