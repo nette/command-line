@@ -167,8 +167,8 @@ does for `--no-color` and a test for a memory stream.
 
 `hasColors()` and `isTerminal()` are **two questions, not one**. Colors follow the terminal but
 `NO_COLOR` (disables) and `FORCE_COLOR` (decides whatever the stream is) override it, so gate
-*color* on the first and *interactive-only features* (a progress bar, line rewriting, a prompt) on
-the second: a user may set `NO_COLOR` and still be on a real terminal.
+*color* on the first and *interactive-only features* (a status, line rewriting, a prompt) on the
+second: a user may set `NO_COLOR` and still be on a real terminal.
 
 - **The console writes what it is given.** `color()` is the only place that adds a sequence, and
   with colors off it adds none, so composed text comes out plain by itself. `write()` rewrites
@@ -177,6 +177,19 @@ the second: a user may set `NO_COLOR` and still be on a real terminal.
   subprocess) drops its colors with `Ansi::strip()`, which is the rare case and the visible one.
 - **`color()` refuses an unknown name even when colors are off**, so a typo cannot wait for a
   terminal to show up. A `null` color is no color at all, which spares the caller a branch.
+- **`setStatus()` owns the drawing in place.** It cuts every line to the width (a wrapped line
+  could not be redrawn), hides the cursor, and leaves it at the first line of the status;
+  `write()` and `clearStatus()` then erase from there down with `\e[J`, so the console keeps no
+  height or width of its own. The next `setStatus()` draws below what was written meanwhile. A
+  shutdown function shows the cursor again, because a process that dies must not leave it hidden.
+- **A status takes whole lines**, so one drawn after output that did not end with a newline opens
+  a line of its own; erasing it would otherwise take that half-written line with it. Therefore
+  `write()` remembers whether the text ended with a newline, which is the cheap answer and errs
+  on the safe side: a text of escape sequences alone only costs an empty line. Nothing to draw
+  (`''` or `[]`) erases the status instead of drawing an empty one.
+- **A status knows only its own console.** Two consoles over stdout and stderr are two objects on
+  one terminal, so writing to the one erases nothing drawn by the other. Draw the status on the
+  console the run also writes its errors to, or a warning printed meanwhile lands over the status.
 - `getWidth()` reads `COLUMNS` **every time**, which is how a narrow terminal is simulated in
   tests, and takes it only as a positive integer. Otherwise the terminal is asked only when the
   stream is one, so the help sent to STDERR follows STDERR; that answer is cached for the

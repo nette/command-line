@@ -436,6 +436,23 @@ With colors off `color()` adds none, so text you compose comes out plain by itse
 $console->write($console->hasColors() ? $output : Ansi::strip($output));
 ```
 
+
+Status Lines
+------------
+
+`setStatus()` draws lines in place, a progress bar or a panel of what runs now. The next output erases them, so nothing has to be cleared by hand, and the next `setStatus()` draws them again below it:
+
+```php
+foreach ($files as $i => $file) {
+	$console->setStatus(sprintf('%d/%d  %s', $i + 1, count($files), $file));
+	$console->writeLine(check($file));  // erases the status and writes above it
+}
+
+$console->clearStatus();
+```
+
+A line too long is cut to the width of the terminal, since a wrapped one could not be redrawn, and the cursor is hidden while the status is shown and comes back even when the process dies. Where the stream is not a terminal, `setStatus()` does nothing at all, so a redirected output holds only the real lines.
+
 `Ansi` measures and cuts text the way the terminal shows it: an escape sequence takes no column, a wide character (CJK, emoji) two. Use it wherever a column has to line up:
 
 ```php

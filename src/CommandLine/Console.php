@@ -7,12 +7,13 @@
 
 namespace Nette\CommandLine;
 
-use function count, function_exists;
+use function count, function_exists, is_array, is_resource;
 use const PHP_OS_FAMILY, PHP_SAPI;
 
 
 /**
- * Writes to a stream, in color where the stream takes it.
+ * Writes to a stream, in color where the stream takes it, and keeps a status of lines drawn in place,
+ * which the next output replaces.
  */
 final class Console
 {
@@ -28,6 +29,13 @@ final class Console
 	private $stream;
 	private bool $colors;
 	private readonly bool $terminal;
+
+	/** @var ?list<string>  the lines drawn in place, null when the status is gone */
+	private ?array $status = null;
+	private bool $restoresCursor = false;
+
+	/** the cursor stands at the beginning of a line, so a status may be drawn without erasing one */
+	private bool $atLineStart = true;
 	private static ?int $measuredWidth = null;
 
 
@@ -45,12 +53,16 @@ final class Console
 
 
 	/**
-	 * Writes the text as it is, in the color when one is given. What comes from elsewhere and may carry
-	 * colors this console must not pass on is filtered by the caller with Ansi::strip().
+	 * Writes the text as it is, in the color when one is given, and erases the status drawn before it. What comes
+	 * from elsewhere and may carry colors this console must not pass on is filtered by the caller with Ansi::strip().
 	 */
 	public function write(string $text, ?string $color = null): void
 	{
-		fwrite($this->stream, $this->color($color, $text));
+		$this->clearStatus();
+		$this->emit($this->color($color, $text));
+		if ($text !== '') {
+			$this->atLineStart = str_ends_with($text, "\n");
+		}
 	}
 
 
@@ -133,6 +145,53 @@ final class Console
 
 
 	/**
+	 * Draws the lines in place of the ones drawn before, a progress bar or a panel; the next write() erases them and
+	 * the next setStatus() draws them below its output. A line too long is cut, since a wrapped one cannot be redrawn,
+	 * and nothing to draw erases the status. Nothing is drawn when the stream is not a terminal.
+	 * @param  string|list<string>  $lines
+	 */
+	public function setStatus(string|array $lines): void
+	{
+		if (!$this->terminal) {
+			return;
+		} elseif ($lines === '' || $lines === []) {
+			$this->clearStatus();
+			return;
+		}
+
+		$lines = is_array($lines) ? $lines : explode("\n", $lines);
+		$width = $this->getWidth();
+		$out = $this->status !== null
+			? "\e[J" // erase what is drawn, the cursor stands at its first line
+			: ($this->atLineStart ? '' : "\n") // a status takes whole lines, so it never erases a half-written one
+				. "\e[?25l"; // hide the cursor, which would jump around the status
+		$out .= implode("\n", array_map(fn(string $line) => Ansi::truncate($line, $width), $lines));
+
+		// back to the first line of the status, where the next write() erases from
+		$this->emit($out . "\r" . (count($lines) > 1 ? "\e[" . (count($lines) - 1) . 'A' : ''));
+		$this->status = $lines;
+		$this->atLineStart = true;
+
+		if (!$this->restoresCursor) { // a process that dies must not leave the cursor hidden
+			$this->restoresCursor = true;
+			register_shutdown_function($this->clearStatus(...));
+		}
+	}
+
+
+	/**
+	 * Erases the status and shows the cursor again.
+	 */
+	public function clearStatus(): void
+	{
+		if ($this->status !== null) {
+			$this->status = null;
+			$this->emit("\e[J\e[?25h");
+		}
+	}
+
+
+	/**
 	 * @param  resource  $stream
 	 */
 	private static function detectTerminal($stream): bool
@@ -177,5 +236,13 @@ final class Console
 		}
 
 		return $values[1] ?? 80; // second numeric value is columns (locale-independent)
+	}
+
+
+	private function emit(string $text): void
+	{
+		if (is_resource($this->stream)) { // a shutdown function may find the stream closed
+			fwrite($this->stream, $text);
+		}
 	}
 }

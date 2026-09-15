@@ -74,9 +74,18 @@ composer phpstan
 - **A `Console` is one stream**, and its colors, width and terminal follow that stream;
   an application writing to stdout and stderr makes one for each. `hasColors()` and
   `isTerminal()` are separate on purpose: gate *color* on the first (it honors
-  `NO_COLOR`/`FORCE_COLOR`), *interactive-only* features (a progress bar, a prompt) on the
+  `NO_COLOR`/`FORCE_COLOR`), *interactive-only* features (a status, a prompt) on the
   second, since a user may disable color yet still be on a real terminal. The help
   colors only through its own roles, which `HelpRenderer::Theme` maps to colors;
   `Console` knows no roles.
+- **The console writes what it is given**: `color()` is the only place that adds a
+  sequence, and none with colors off, while `write()` rewrites nothing, since it cannot
+  tell a text from the content of a file; a caller passing on the output of a subprocess
+  drops the colors itself with `Ansi::strip()`. `write()` and `writeLine()` take the
+  color of the whole text, a line of several is composed of `color()` calls.
+  **`setStatus()` owns the drawing in place** (cut to the width, cursor hidden, erased by
+  the next output of that console alone), so no caller moves the cursor itself.
+  **`Ansi` is the single measure of width** (escape sequence 0, grapheme 1, wide
+  character 2) for the help, a status and any column.
 - User-facing how-to (`addFlag`/`addOption`/`addArgument` and their settings, the help-text
   format, color codes) is manual material and lives in the public web docs, not here.
