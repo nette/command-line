@@ -18,8 +18,9 @@ three phases of `parse()` with the command selection and the sentinel, `isset()`
 
 **Nette Command Line** is a tiny, zero-dependency library. `Command` defines a
 command line as a tree of the program and its commands, `Parser` reads a command
-line against it and returns a `Result` and `Console` colors the output. The
-parameters live in the `Parameters` namespace: `Flag` extends `Parameter`, while
+line against it and returns a `Result`, `Console` colors the output and `Ansi`
+measures text the way a terminal shows it. The parameters live in the
+`Parameters` namespace: `Flag` extends `Parameter`, while
 `Option` and `Argument` extend it through `ValueParameter`.
 
 - **PHP Version**: 8.2 - 8.5

@@ -369,3 +369,14 @@ echo $console->color('white/blue', 'White text on blue background') . "\n";
 The color is `'foreground'` or `'foreground/background'`, one of `black`, `gray`, `silver`, `white`, `navy`, `blue`, `green`, `lime`, `teal`, `aqua`, `maroon`, `red`, `purple`, `fuchsia`, `olive` and `yellow`. Colors are used only when the output supports them (`useColors()` overrides that); otherwise `color()` returns the plain string.
 
 `Console::detectColors()` honors the [NO_COLOR](https://no-color.org) and `FORCE_COLOR` environment variables. `Console::detectTerminal()` tells you whether the output is an interactive terminal, which is the right check for progress bars and prompts: a user may turn colors off and still sit at a real terminal.
+
+`Ansi` measures and cuts text the way the terminal shows it: an escape sequence takes no column, a wide character (CJK, emoji) two. Use it wherever a column has to line up:
+
+```php
+use Nette\CommandLine\Ansi;
+
+Ansi::measure($console->color('red', 'chyba'));   // 5, the escape sequences do not count
+Ansi::pad($console->color('red', 'chyba'), 10);   // padded to 10 columns, not to 10 bytes
+Ansi::truncate($path, 30, keepEnd: true);         // cuts the front, so the file name stays
+Ansi::strip($text);                               // the text without any escape sequence
+```
