@@ -5,6 +5,11 @@ parameters:
 		- src
 
 	ignoreErrors:
+		-   # addCommandFrom() creates the node without the constructor, which refuses the attributes it reads, and assigns each property once
+			identifier: property.readOnlyAssignNotInConstructor
+			path: src/CommandLine/Command.php
+			count: 5
+
 		-   # a handler takes any parameters, which it binds by name; a signature would only refuse them at call sites
 			identifier: missingType.callable
 			paths:

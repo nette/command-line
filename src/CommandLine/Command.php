@@ -35,7 +35,8 @@ final class Command
 
 	/**
 	 * @param  string|list<string>|null  $usage
-	 * @param  ?\Closure  $handler  what ParseResult::run() calls when the command line runs this command
+	 * @param  ?\Closure  $handler  what ParseResult::run() calls when the command line runs this command; it is only bound,
+	 *   an attribute on it is refused
 	 */
 	public function __construct(
 		public readonly ?string $name = null,
@@ -48,7 +49,7 @@ final class Command
 		$this->commandRequired = $commandRequired;
 		$this->handler = $handler;
 		if ($handler !== null) {
-			HandlerBinding::checkSignature($handler);
+			HandlerBinding::checkSignature($handler, described: false);
 		}
 	}
 
@@ -163,7 +164,8 @@ final class Command
 	 * Adds a command such as check in "tool check src". It inherits the options of this command.
 	 * @param  string|list<string>|null  $usage  the usage line(s) written by hand; null generates them from the definitions
 	 * @param  bool  $commandRequired  the command line has to name one of the commands below, unless a standalone flag answers
-	 * @param  ?\Closure  $handler  what ParseResult::run() calls when the command line runs this command
+	 * @param  ?\Closure  $handler  what ParseResult::run() calls when the command line runs this command; it is only bound,
+	 *   an attribute on it is refused
 	 */
 	public function addCommand(
 		string $name,
@@ -178,8 +180,50 @@ final class Command
 
 
 	/**
-	 * Attaches a command once its name and options pass the checks against the path, so a refused one leaves the tree
-	 * as it was.
+	 * Adds the command the attributes of the handler describe: #[Command] and the inputs its parameters declare; the
+	 * name is derived from the method unless the attribute gives it.
+	 */
+	public function addCommandFrom(\Closure $handler): self
+	{
+		$declared = HandlerBinding::findCommand($handler) ?? new Attributes\Command;
+		$command = (new \ReflectionClass(self::class))->newInstanceWithoutConstructor(); // the constructor refuses the attributes
+		$command->name = $declared->name ?? HandlerBinding::deriveCommandName($handler);
+		$command->description = $declared->description;
+		$command->usage = is_string($declared->usage) ? [$declared->usage] : $declared->usage;
+		$command->commandRequired = $declared->commandRequired;
+		$command->handler = $handler;
+		HandlerBinding::checkSignature($handler, described: true);
+		HandlerBinding::addParameters($command, $handler);
+		return $this->attach($command);
+	}
+
+
+	/**
+	 * Adds a command for every public method of the object with the attribute #[Command], in the order the class
+	 * declares them, each as addCommandFrom() given that method. One that is not public is refused, a method the class
+	 * keeps to itself it hands over by addCommandFrom().
+	 * @return list<self>
+	 */
+	public function addCommandsFrom(object $handlers): array
+	{
+		$commands = [];
+		foreach ((new \ReflectionObject($handlers))->getMethods() as $method) {
+			if (!$method->getAttributes(Attributes\Command::class)) {
+				continue;
+			} elseif (!$method->isPublic()) {
+				throw new \InvalidArgumentException("Method $method->class::$method->name() has the attribute #[Command] but is not public; addCommandsFrom() adds public methods only.");
+			}
+
+			$commands[] = $this->addCommandFrom($method->getClosure($method->isStatic() ? null : $handlers));
+		}
+
+		return $commands;
+	}
+
+
+	/**
+	 * Attaches a command created with the inputs of its handler, once its name and options pass the checks against the
+	 * path, so a refused one leaves the tree as it was.
 	 */
 	private function attach(self $command): self
 	{
@@ -187,7 +231,7 @@ final class Command
 			throw new \InvalidArgumentException("{$this->getLabel()} takes arguments, so it cannot have subcommands.");
 		}
 
-		$name = (string) $command->name;
+		$name = $command->name ?? throw new \InvalidArgumentException('A closure or __invoke() given to addCommandFrom() has no name to derive the command from; give it by name: of the attribute #[Command].');
 		NameSyntax::assertWordName($name, 'Command');
 		if (array_filter($this->getCommands(), fn(self $other) => $other->name === $name)) {
 			throw new \InvalidArgumentException("Command '$name' is already defined.");
@@ -197,6 +241,14 @@ final class Command
 			foreach ($level->getOptions() as $option) {
 				if ($option instanceof Option && $option->valueOptional && in_array($name, $option->enum ?? [], true)) {
 					throw new \InvalidArgumentException("Command '$name' is a value of option $option->name, which would take it.");
+				}
+
+				foreach ($command->getOptions() as $own) { // the inputs of the handler, checked against the command alone so far
+					foreach ([$own->name, $own->alias, $own instanceof Flag ? $own->negation : null] as $ownName) {
+						if ($ownName !== null && $option->hasName($ownName)) {
+							throw new \InvalidArgumentException("Option '$ownName' is already defined.");
+						}
+					}
 				}
 			}
 		}
