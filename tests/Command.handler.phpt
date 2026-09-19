@@ -40,7 +40,7 @@ test('the signature is refused when the handler is given', function () {
 	Assert::exception(
 		fn() => new Command(handler: $handlers->withDefault(...)),
 		InvalidArgumentException::class,
-		'Parameter $output of handler HandlerSignatures::withDefault() has a default value, which would never be used: it binds to an input defined elsewhere, which carries the default.',
+		'Parameter $output of handler HandlerSignatures::withDefault() has a default value, which would never be used: without an attribute it binds to an input defined elsewhere, which carries the default.',
 	);
 	Assert::exception(
 		fn() => new Command(handler: $handlers->returnsString(...)),

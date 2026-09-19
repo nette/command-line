@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-use Nette\CommandLine\{Command, Normalizers, ParseException};
+use Nette\CommandLine\{Attributes, Command, Normalizers, ParseException, Parser};
 use Tester\Assert;
 
 require __DIR__ . '/bootstrap.php';
@@ -107,6 +107,17 @@ test('a range that no number fits is a ValueError, which the parser does not tur
 });
 
 
+test('int() and float() without a range are written into an attribute as they are', function () {
+	$cli = Command::from(fn(
+		#[Attributes\Option(normalizer: [Normalizers::class, 'int'])]
+		?int $count = null,
+		#[Attributes\Option(normalizer: [Normalizers::class, 'float'])]
+		?float $ratio = null,
+	) => $count === 3 && $ratio === 0.5 ? 1 : 0);
+	Assert::same(1, (new Parser)->parse($cli, ['--count=3', '--ratio=.5'])->run());
+});
+
+
 test('realPath() resolves the path and refuses a missing or an empty one', function () {
 	$command = new Command;
 	$command->addOption('--config', normalizer: Normalizers::realPath(...));
@@ -124,4 +135,13 @@ test('realPath() can finish a normalizer of your own', function () {
 	$command = new Command;
 	$command->addOption('--test', normalizer: fn($v) => Normalizers::realPath(__DIR__ . "/$v"));
 	Assert::same(realpath(__DIR__ . '/bootstrap.php'), parseArgs($command, ['--test', 'bootstrap.php'])['--test']);
+});
+
+
+test('realPath() is written into an attribute as it is', function () {
+	$cli = Command::from(fn(
+		#[Attributes\Argument('Configuration file', normalizer: [Normalizers::class, 'realPath'])]
+		string $config,
+	) => $config === __FILE__ ? 1 : 0);
+	Assert::same(1, (new Parser)->parse($cli, [__FILE__])->run());
 });

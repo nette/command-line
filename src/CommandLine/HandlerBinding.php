@@ -8,28 +8,91 @@
 namespace Nette\CommandLine;
 
 use Nette\CommandLine\Parameters\{Argument, Flag, Option, Parameter, ValueParameter};
-use function count, is_bool, is_int;
+use function count, is_array, is_bool, is_int, is_object;
 
 
 /**
- * Binds the parameters of a handler to the inputs of its command, checks that they accept every value the inputs
- * can give, and calls it.
+ * Defines the inputs the attributes of a handler declare, binds its parameters to the inputs of its command, checks
+ * that they accept every value the inputs can give, and calls it.
  * @internal
  */
 final class HandlerBinding
 {
+	private const InputAttributes = [Attributes\Flag::class, Attributes\Option::class, Attributes\Argument::class];
+
+
 	/**
-	 * Refuses what the signature of a handler says wrong on its own, before any command line is read.
+	 * Finds the attribute #[Command] of the handler, refusing an attribute of an input placed on it.
 	 */
-	public static function checkSignature(\Closure $handler): void
+	public static function findCommand(\Closure $handler): ?Attributes\Command
 	{
 		$function = new \ReflectionFunction($handler);
+		foreach ($function->getAttributes() as $attribute) {
+			if (in_array($attribute->getName(), self::InputAttributes, true)) {
+				throw new \InvalidArgumentException(
+					'Attribute #[' . self::shortenName($attribute->getName()) . '] of handler '
+					. self::describeHandler($function)
+					. ' belongs to a parameter.',
+				);
+			}
+		}
+
+		return ($function->getAttributes(Attributes\Command::class)[0] ?? null)?->newInstance();
+	}
+
+
+	/**
+	 * The name of the command a method runs, migrate-suppressions for migrateSuppressions(); null for a closure and
+	 * for __invoke(), whose name says nothing of the command.
+	 */
+	public static function deriveCommandName(\Closure $handler): ?string
+	{
+		$function = new \ReflectionFunction($handler);
+		return str_starts_with($function->name, '{closure') || str_starts_with($function->name, '__')
+			? null
+			: self::deriveName($function->name);
+	}
+
+
+	/**
+	 * Refuses what the signature of a handler says wrong on its own, before any command line is read.
+	 * @param  bool  $described  the handler describes its command by attributes, which are otherwise refused
+	 */
+	public static function checkSignature(\Closure $handler, bool $described): void
+	{
+		$function = new \ReflectionFunction($handler);
+		$attributes = $function->getAttributes();
+		foreach ($function->getParameters() as $parameter) {
+			$attributes = [...$attributes, ...$parameter->getAttributes()];
+		}
+
+		foreach ($described ? [] : $attributes as $attribute) {
+			if (in_array($attribute->getName(), [Attributes\Command::class, ...self::InputAttributes], true)) {
+				throw new \InvalidArgumentException(
+					'Attribute #[' . self::shortenName($attribute->getName()) . '] of handler '
+					. self::describeHandler($function)
+					. ' is only read by Command::from() and addCommandFrom().',
+				);
+			}
+		}
+
 		self::checkParameters($function->getParameters(), 'handler ' . self::describeHandler($function));
 		$type = $function->getReturnType();
 		$returns = $type === null ? null : self::listTypes($type);
 		if ($type !== null && ($returns === null || array_diff($returns, ['int', 'null', 'void', 'never', 'mixed']))) {
 			throw new \InvalidArgumentException('Handler ' . self::describeHandler($function) . " returns $type; it returns an exit code, int or nothing.");
 		}
+	}
+
+
+	/**
+	 * Adds to the command the inputs its handler declares by attributes of its parameters and of the constructors of
+	 * its objects of options, in their order, and checks the parameters accept their values.
+	 */
+	public static function addParameters(Command $command, \Closure $handler): void
+	{
+		$function = new \ReflectionFunction($handler);
+		self::addInputs($command, $function->getParameters(), 'handler ' . self::describeHandler($function));
 	}
 
 
@@ -75,14 +138,103 @@ final class HandlerBinding
 	{
 		foreach ($parameters as $parameter) {
 			$label = 'Parameter $' . $parameter->name . ' of ' . $owner;
-			if ($parameter->isVariadic()) {
+			$attribute = self::findInputAttribute($parameter, $label);
+			$default = $parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : null;
+			if ($parameter->getAttributes(Attributes\Command::class)) {
+				throw new \InvalidArgumentException("$label has attribute #[Command], which belongs to the handler.");
+			} elseif ($parameter->isVariadic()) {
 				throw new \InvalidArgumentException("$label is variadic; take a repeatable input as an array.");
 			} elseif ($parameter->isPassedByReference()) {
 				throw new \InvalidArgumentException("$label is passed by reference.");
-			} elseif ($parameter->isDefaultValueAvailable()) {
-				throw new \InvalidArgumentException("$label has a default value, which would never be used: it binds to an input defined elsewhere, which carries the default.");
+			} elseif ($attribute !== null && self::findInjection($parameter) !== null) {
+				throw new \InvalidArgumentException("$label is given by its type, so it defines no input.");
+			} elseif ($attribute === null && $parameter->isDefaultValueAvailable()) {
+				throw new \InvalidArgumentException("$label has a default value, which would never be used: without an attribute it binds to an input defined elsewhere, which carries the default.");
+			} elseif (is_object($default) && !$default instanceof \UnitEnum) {
+				throw new \InvalidArgumentException("$label has an object as its default value, which every run would share.");
+			} elseif (
+				$attribute instanceof Attributes\Argument
+				&& $attribute->optional === false
+				&& $parameter->isDefaultValueAvailable()
+			) {
+				throw new \InvalidArgumentException("$label defines a required argument, so its default value would never be used.");
 			}
 		}
+	}
+
+
+	/**
+	 * @param  list<\ReflectionParameter>  $parameters
+	 */
+	private static function addInputs(Command $command, array $parameters, string $owner): void
+	{
+		foreach ($parameters as $parameter) {
+			$label = 'Parameter $' . $parameter->name . ' of ' . $owner;
+			$attribute = self::findInputAttribute($parameter, $label);
+			if ($attribute === null) {
+				continue;
+			}
+
+			$name = self::deriveInputName($parameter, $attribute);
+			$default = $parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : null;
+			$normalizer = $attribute instanceof Attributes\Flag ? null : self::createNormalizer($attribute->normalizer, $label);
+			$input = match (true) {
+				$attribute instanceof Attributes\Flag => $command->addFlag(
+					$name,
+					$attribute->description,
+					alias: $attribute->alias,
+					standalone: $attribute->standalone,
+					negatable: $attribute->negatable,
+					default: $default,
+					defaultDescription: $attribute->defaultDescription,
+					repeatable: $attribute->repeatable,
+					hidden: $attribute->hidden,
+				),
+				$attribute instanceof Attributes\Option => $command->addOption(
+					$name,
+					$attribute->description,
+					alias: $attribute->alias,
+					valueName: $attribute->valueName,
+					valueOptional: $attribute->valueOptional,
+					enum: $attribute->enum ?? ($normalizer === null ? self::findEnumClass($parameter) : null),
+					normalizer: $normalizer,
+					default: $default,
+					defaultDescription: $attribute->defaultDescription,
+					repeatable: $attribute->repeatable,
+					hidden: $attribute->hidden,
+				),
+				default => $command->addArgument(
+					$name,
+					$attribute->description,
+					optional: $attribute->optional ?? $parameter->isDefaultValueAvailable(),
+					enum: $attribute->enum ?? ($normalizer === null ? self::findEnumClass($parameter) : null),
+					normalizer: $normalizer,
+					default: $default,
+					defaultDescription: $attribute->defaultDescription,
+					repeatable: $attribute->repeatable,
+					hidden: $attribute->hidden,
+				),
+			};
+			self::checkType($parameter, $input, $label);
+		}
+	}
+
+
+	/**
+	 * A normalizer written in an attribute: a closure, or a static method as [class, name], which every PHP writes there.
+	 * @param  \Closure|array{class-string, string}|null  $normalizer
+	 */
+	private static function createNormalizer(\Closure|array|null $normalizer, string $label): ?\Closure
+	{
+		if (!is_array($normalizer)) {
+			return $normalizer;
+		}
+
+		[$class, $method] = $normalizer;
+		$reflection = method_exists($class, $method) ? new \ReflectionMethod($class, $method) : null;
+		return $reflection?->isStatic()
+			? $reflection->getClosure()
+			: throw new \InvalidArgumentException("$label has normalizer $class::$method(), which is no static method.");
 	}
 
 
@@ -106,13 +258,14 @@ final class HandlerBinding
 	{
 		$resolvers = [];
 		foreach ($parameters as $parameter) {
+			$attribute = self::findInputAttribute($parameter, 'Parameter $' . $parameter->name . ' of ' . $owner);
 			$injection = self::findInjection($parameter);
 			if ($injection === ParseResult::class) {
 				$resolvers[] = fn(ParseResult $result) => $result;
 			} elseif ($injection === Command::class) {
 				$resolvers[] = fn(ParseResult $result) => $result->command;
 			} else {
-				$input = self::findInput($command, $owner, $parameter);
+				$input = self::findInput($command, $owner, $parameter, $attribute);
 				$resolvers[] = fn(ParseResult $result) => $result->get($input->name);
 			}
 		}
@@ -133,17 +286,25 @@ final class HandlerBinding
 
 
 	/**
-	 * Finds the input the parameter is named after, the option --max-warnings or the argument max-warnings for
-	 * $maxWarnings, and checks it gives nothing the parameter refuses.
+	 * Finds the input the parameter defines by its attribute, or the one it is named after, the option --max-warnings
+	 * or the argument max-warnings for $maxWarnings, and checks it gives nothing the parameter refuses.
 	 */
-	private static function findInput(Command $command, string $owner, \ReflectionParameter $parameter): Parameter
+	private static function findInput(
+		Command $command,
+		string $owner,
+		\ReflectionParameter $parameter,
+		Attributes\Flag|Attributes\Option|Attributes\Argument|null $attribute,
+	): Parameter
 	{
 		$label = $command->getLabel() . ': parameter $' . $parameter->name . ' of ' . $owner;
 		$name = self::deriveName($parameter->name);
 		$found = [];
-		foreach ($command->getPath() as $level) {
+		foreach ($attribute === null ? $command->getPath() : [$command] as $level) {
 			foreach ($level->getParameters() as $input) {
-				if ($input->name === "--$name" || ($input instanceof Argument && $input->name === $name)) {
+				if ($attribute === null
+					? $input->name === "--$name" || ($input instanceof Argument && $input->name === $name)
+					: $input->name === self::deriveInputName($parameter, $attribute)
+				) {
 					$found[] = $input;
 				}
 			}
@@ -157,6 +318,53 @@ final class HandlerBinding
 
 		self::checkType($parameter, $found[0], $label);
 		return $found[0];
+	}
+
+
+	/**
+	 * Finds the attribute #[Flag], #[Option] or #[Argument] by which the parameter defines its input.
+	 */
+	private static function findInputAttribute(
+		\ReflectionParameter $parameter,
+		string $label,
+	): Attributes\Flag|Attributes\Option|Attributes\Argument|null
+	{
+		$attributes = array_filter(
+			$parameter->getAttributes(),
+			fn(\ReflectionAttribute $attribute) => in_array($attribute->getName(), self::InputAttributes, true),
+		);
+		if (count($attributes) > 1) {
+			throw new \InvalidArgumentException("$label has more than one of the attributes #[Flag], #[Option] and #[Argument].");
+		}
+
+		$attribute = $attributes ? reset($attributes)->newInstance() : null;
+		return $attribute instanceof Attributes\Flag || $attribute instanceof Attributes\Option || $attribute instanceof Attributes\Argument
+			? $attribute
+			: null;
+	}
+
+
+	/**
+	 * The name of the input an attribute defines: its own, or the one derived from the parameter, --dry-run for $dryRun.
+	 */
+	private static function deriveInputName(
+		\ReflectionParameter $parameter,
+		Attributes\Flag|Attributes\Option|Attributes\Argument $attribute,
+	): string
+	{
+		return $attribute->name
+			?? ($attribute instanceof Attributes\Argument ? '' : '--') . self::deriveName($parameter->name);
+	}
+
+
+	/**
+	 * @return ?class-string<\BackedEnum>
+	 */
+	private static function findEnumClass(\ReflectionParameter $parameter): ?string
+	{
+		$type = $parameter->getType();
+		$name = $type instanceof \ReflectionNamedType ? $type->getName() : null;
+		return $name !== null && is_subclass_of($name, \BackedEnum::class) ? $name : null;
 	}
 
 
@@ -286,6 +494,12 @@ final class HandlerBinding
 	private static function deriveName(string $parameter): string
 	{
 		return strtolower((string) preg_replace('#(?<=[a-z0-9])(?=[A-Z])#', '-', $parameter));
+	}
+
+
+	private static function shortenName(string $class): string
+	{
+		return substr($class, (int) strrpos($class, '\\') + 1);
 	}
 
 
