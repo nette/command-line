@@ -9,15 +9,21 @@ internally and the rationale behind key design decisions - lives in `docs/`.
 Consult it before non-trivial changes; it is the source of truth from which the
 public manual is distilled.
 
-Two small classes, mostly clear from signatures; the value is a few traps - the
-help-text-as-schema parser, the `parse()` sentinel, and the two terminal checks.
-Read `docs/internals.md` before editing them.
+Small classes, mostly clear from signatures; the value is a handful of traps - the
+three phases of `parse()` with the command selection and the sentinel, `isset()` on
+`ParseResult`, and the two questions a console answers about its stream. Read
+`docs/internals.md` before editing them.
 
 ## Project Overview
 
-**Nette Command Line** is a tiny, zero-dependency library with two utilities:
-`Parser` (argument/option parsing, including help-text-driven definitions) and
-`Console` (terminal color output with capability detection).
+**Nette Command Line** is a tiny, zero-dependency library. `Command` defines a
+command line as a tree of the program and its commands, `Parser` reads a command
+line against it and returns a `ParseResult`, `HelpRenderer` draws the help of any
+command, `Console` writes to a stream in color and `Ansi` measures text the way a
+terminal shows it. The parameters live in the
+`Parameters` namespace: `Flag` extends `Parameter`, while `Option` and `Argument`
+extend it through `ValueParameter`. `Section` and `Text` in the `Help` namespace
+shape the help.
 
 - **PHP Version**: 8.2 - 8.5
 - **Package**: `nette/command-line`
@@ -27,7 +33,7 @@ Read `docs/internals.md` before editing them.
 ```bash
 # Run all tests
 vendor/bin/tester tests -s        # or: composer tester
-vendor/bin/tester tests/Parser.fluent.phpt -s
+vendor/bin/tester tests/Parser.parse.phpt -s
 
 # Static analysis (PHPStan level 8)
 composer phpstan
@@ -37,29 +43,49 @@ composer phpstan
 
 - Every file starts with `declare(strict_types=1);`; **tabs**; everything typed;
   Nette Coding Standard.
-- Constants are modern PascalCase (`Parser::Optional`) with deprecated UPPERCASE
-  aliases kept for BC.
+- Constants and enum cases are modern PascalCase (`ParseFailure::UnknownOption`).
 - Tests are Nette Tester `.phpt` under `tests/` (require `bootstrap.php`); use
   `test()` / `Assert::same` / `Assert::exception`, no comment before `test()`.
 
 ## Working in this repo
 
-- **Help text *is* the schema.** `addFromHelp()` parses formatted help with two
-  regexes: the option name is the **last** flag on a line, the alias the first; a
-  `<file>`/`[type]` spec sets required/optional, `...` marks repeatable, `<a|b|c>` an
-  enum. The `$defaults` array merges over the parsed result (it supplies `RealPath`,
-  `Normalizer`, etc.); `RealPath` desugars into a `Normalizer`.
-- **`parse()` uses an `OptionPresent = true` sentinel.** A bare `--flag` yields the
-  literal `true`; a value is taken from the next token only if it doesn't start with
-  `-`. So an optional-value option used bare parses as **`true`, not its fallback** -
-  the **fallback applies only when the option is absent entirely**. A missing required
-  *positional argument* throws; a missing required *option* becomes `null`.
-- **`parseOnly()` is deliberately dumb** - it parses only the named options, never
-  validates, never throws (so `--help`/`--version` work despite a missing required
-  argument). Don't add validation to it.
-- **`Console::detectColors()` and `detectTerminal()` are separate on purpose.** Gate
-  *color* on `detectColors` (honors `NO_COLOR`/`FORCE_COLOR`), but gate
-  *interactive-only* features (progress bars, prompts) on `detectTerminal` (pure TTY)
-  - a user may disable color yet still be on a real terminal.
-- User-facing how-to (fluent `addSwitch`/`addOption`/`addArgument`, the help-text
+- **Definition, parsing, help and output are four classes.** `Command` never
+  touches `argv`, the environment or a stream; `Parser` and `HelpRenderer` take
+  the command as an argument and keep no state; `Console` knows no `Command`.
+  Each node keeps one ordered list of items and the help is always drawn from it.
+- **Every setting is a named argument of `add*()` and cannot change afterwards**, so
+  everything is refused at once, the rules over several arguments included, and the
+  parser checks no definition. A setting that makes no sense for a kind of parameter
+  is not an argument of its `add*()` method.
+- **`parse()` has three phases**: collect the raw occurrences while following the
+  command names down the tree, convert what was supplied, fill in what was not.
+  The line is always read from the root and the valid options are those of the
+  selected node and its ancestors. Presence is recorded separately from value, so
+  a normalizer may return `null`; an optional value and the default value are
+  independent.
+- **A bare `--flag` yields the literal `true` sentinel**, which neither the enum
+  check nor the normalizer sees. An optional-value option used bare is therefore
+  `true`, not its default; the default applies only when the option is absent.
+- **`standalone` answers between phase 1 and 2**, after the command is selected:
+  the flag is `true`, the other flags are taken as given (they need no conversion),
+  everything else is its default, nothing is validated or converted.
+- **`isset()` on `ParseResult` is false for a known name with `null`**, like on an
+  array; reading an unknown name throws. Consumers rely on both.
+- **A `Console` is one stream**, and its colors, width and terminal follow that stream;
+  an application writing to stdout and stderr makes one for each. `hasColors()` and
+  `isTerminal()` are separate on purpose: gate *color* on the first (it honors
+  `NO_COLOR`/`FORCE_COLOR`), *interactive-only* features (a status, a prompt) on the
+  second, since a user may disable color yet still be on a real terminal. The help
+  colors only through its own roles, which `HelpRenderer::Theme` maps to colors;
+  `Console` knows no roles.
+- **The console writes what it is given**: `color()` and `link()` are the only places that
+  add a sequence, and none with colors off, while `write()` rewrites nothing, since it cannot
+  tell a text from the content of a file; a caller passing on the output of a subprocess
+  drops the colors itself with `Ansi::strip()`. `write()` and `writeLine()` take the
+  color of the whole text, a line of several is composed of `color()` calls.
+  **`setStatus()` owns the drawing in place** (cut to the width, cursor hidden, erased by
+  the next output of that console alone), so no caller moves the cursor itself.
+  **`Ansi` is the single measure of width** (escape sequence 0, grapheme 1, wide
+  character 2, wider where unsure) for the help, a status and any column.
+- User-facing how-to (`addFlag`/`addOption`/`addArgument` and their settings, the help-text
   format, color codes) is manual material and lives in the public web docs, not here.
