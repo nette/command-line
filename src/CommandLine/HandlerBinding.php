@@ -13,7 +13,8 @@ use function count, is_array, is_bool, is_int, is_object;
 
 /**
  * Defines the inputs the attributes of a handler declare, binds its parameters to the inputs of its command, checks
- * that they accept every value the inputs can give, and calls it.
+ * that they accept every value the inputs can give, and calls it. A parameter typed by a class whose constructor
+ * declares inputs is an object of options: its inputs are defined and bound the same way, and it is built for the call.
  * @internal
  */
 final class HandlerBinding
@@ -76,7 +77,13 @@ final class HandlerBinding
 			}
 		}
 
-		self::checkParameters($function->getParameters(), 'handler ' . self::describeHandler($function));
+		foreach ($described ? [] : $function->getParameters() as $parameter) {
+			if ($class = self::findOptionsClass($parameter)) {
+				throw new \InvalidArgumentException('Parameter $' . $parameter->name . ' of handler ' . self::describeHandler($function) . " is an object of options $class->name, which is only read by Command::from() and addCommandFrom().");
+			}
+		}
+
+		self::checkParameters($function->getParameters(), 'handler ' . self::describeHandler($function), []);
 		$type = $function->getReturnType();
 		$returns = $type === null ? null : self::listTypes($type);
 		if ($type !== null && ($returns === null || array_diff($returns, ['int', 'null', 'void', 'never', 'mixed']))) {
@@ -132,9 +139,10 @@ final class HandlerBinding
 
 	/**
 	 * @param  list<\ReflectionParameter>  $parameters
-	 * @param  string  $owner  the handler the parameters belong to, for the messages
+	 * @param  string  $owner  the handler or the constructor the parameters belong to, for the messages
+	 * @param  list<string>  $classes  the objects of options the parameters are nested in, to refuse a cycle
 	 */
-	private static function checkParameters(array $parameters, string $owner): void
+	private static function checkParameters(array $parameters, string $owner, array $classes): void
 	{
 		foreach ($parameters as $parameter) {
 			$label = 'Parameter $' . $parameter->name . ' of ' . $owner;
@@ -158,6 +166,18 @@ final class HandlerBinding
 				&& $parameter->isDefaultValueAvailable()
 			) {
 				throw new \InvalidArgumentException("$label defines a required argument, so its default value would never be used.");
+			} elseif ($attribute === null && ($class = self::findOptionsClass($parameter))) {
+				if (!$class->isInstantiable()) {
+					throw new \InvalidArgumentException("$label is an object of options $class->name, which cannot be created; it needs a public constructor and no abstract class.");
+				} elseif (in_array($class->name, $classes, true)) {
+					throw new \InvalidArgumentException("$label is an object of options $class->name, which contains itself: " . implode(' > ', [...$classes, $class->name]) . '.');
+				}
+
+				self::checkParameters(
+					$class->getConstructor()?->getParameters() ?? [],
+					$class->name . '::__construct()',
+					[...$classes, $class->name],
+				);
 			}
 		}
 	}
@@ -172,6 +192,10 @@ final class HandlerBinding
 			$label = 'Parameter $' . $parameter->name . ' of ' . $owner;
 			$attribute = self::findInputAttribute($parameter, $label);
 			if ($attribute === null) {
+				if ($class = self::findOptionsClass($parameter)) {
+					self::addInputs($command, $class->getConstructor()?->getParameters() ?? [], $class->name . '::__construct()');
+				}
+
 				continue;
 			}
 
@@ -239,8 +263,8 @@ final class HandlerBinding
 
 
 	/**
-	 * Finds what each parameter is given, as a function of the result: the result, the command or an input on the way
-	 * to it.
+	 * Finds what each parameter is given, as a function of the result: the result, the command, an input on the way to
+	 * it, or an object of options created from what its constructor is given.
 	 * @return list<\Closure(ParseResult): mixed>
 	 */
 	private static function bind(Command $command, \Closure $handler): array
@@ -259,11 +283,17 @@ final class HandlerBinding
 		$resolvers = [];
 		foreach ($parameters as $parameter) {
 			$attribute = self::findInputAttribute($parameter, 'Parameter $' . $parameter->name . ' of ' . $owner);
+			$class = $attribute === null ? self::findOptionsClass($parameter) : null;
 			$injection = self::findInjection($parameter);
 			if ($injection === ParseResult::class) {
 				$resolvers[] = fn(ParseResult $result) => $result;
 			} elseif ($injection === Command::class) {
 				$resolvers[] = fn(ParseResult $result) => $result->command;
+			} elseif ($class !== null) {
+				$inner = self::bindParameters($command, $class->getConstructor()?->getParameters() ?? [], $class->name . '::__construct()');
+				$resolvers[] = fn(ParseResult $result) => $class->newInstance(
+					...array_map(fn(\Closure $resolve) => $resolve($result), $inner),
+				);
 			} else {
 				$input = self::findInput($command, $owner, $parameter, $attribute);
 				$resolvers[] = fn(ParseResult $result) => $result->get($input->name);
@@ -282,6 +312,35 @@ final class HandlerBinding
 		$type = $parameter->getType();
 		$name = $type instanceof \ReflectionNamedType ? $type->getName() : null;
 		return $name === ParseResult::class || $name === Command::class ? $name : null;
+	}
+
+
+	/**
+	 * Finds the class of an object of options, which the parameter is typed by and whose constructor declares inputs.
+	 * @return ?\ReflectionClass<object>
+	 */
+	private static function findOptionsClass(\ReflectionParameter $parameter): ?\ReflectionClass
+	{
+		$type = $parameter->getType();
+		if (
+			!$type instanceof \ReflectionNamedType
+			|| $type->isBuiltin()
+			|| self::findInjection($parameter) !== null
+			|| !class_exists($type->getName())
+		) {
+			return null;
+		}
+
+		$class = new \ReflectionClass($type->getName());
+		foreach ($class->getConstructor()?->getParameters() ?? [] as $parameter) {
+			foreach ($parameter->getAttributes() as $attribute) {
+				if (in_array($attribute->getName(), self::InputAttributes, true)) {
+					return $class;
+				}
+			}
+		}
+
+		return null;
 	}
 
 
