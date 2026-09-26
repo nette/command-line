@@ -85,6 +85,17 @@ final class Console
 
 
 	/**
+	 * Tells the console that the cursor stands at the beginning of a line, which the terminal moved it to by echoing
+	 * an answer typed by the user.
+	 * @internal
+	 */
+	public function markLineStart(): void
+	{
+		$this->atLineStart = true;
+	}
+
+
+	/**
 	 * Colors the text, or returns it as it is when the color is null or colors are off. The color is 'foreground'
 	 * or 'foreground/background' (e.g. 'red', 'white/blue'), each of them one of black, gray, silver, white, navy,
 	 * blue, green, lime, teal, aqua, maroon, red, purple, fuchsia, olive and yellow, which the terminal draws in the
