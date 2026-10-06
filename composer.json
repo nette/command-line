@@ -24,6 +24,9 @@
 		"phpstan/extension-installer": "^1.4@stable",
 		"nette/phpstan-rules": "^1.0"
 	},
+	"suggest": {
+		"nette/schema": "To turn the parsed arguments into typed, validated values"
+	},
 	"autoload": {
 		"classmap": ["src/"],
 		"psr-4": {
