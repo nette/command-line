@@ -1,5 +1,39 @@
 # Upgrading nette/command-line
 
+## 2.0.0
+
+- **Removed** `Nette\CommandLine\Parser::addFromHelp()`: the definition is no longer read from a help text; build it on a `Nette\CommandLine\Command` with `Nette\CommandLine\Command::addFlag()`, `Nette\CommandLine\Command::addOption()` and `Nette\CommandLine\Command::addArgument()` (3735b068)
+- **Removed** `Nette\CommandLine\Parser::Argument`: the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()`; the key told whether an option takes a value, so call `Nette\CommandLine\Command::addOption()` for one with a value and `Nette\CommandLine\Command::addFlag()` for one without (3735b068)
+- **Removed** `Nette\CommandLine\Parser::Optional`: the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()`; pass `valueOptional: true` to `Nette\CommandLine\Command::addOption()`, or `optional: true` to `Nette\CommandLine\Command::addArgument()` for a positional argument (3735b068)
+- **Removed** `Nette\CommandLine\Parser::Repeatable`: the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()`; pass `repeatable:` to the `add*()` method of `Nette\CommandLine\Command` (3735b068)
+- **Removed** `Nette\CommandLine\Parser::Enum`: the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()`; pass `enum:` to the `add*()` method of `Nette\CommandLine\Command` (3735b068)
+- **Removed** `Nette\CommandLine\Parser::RealPath`: the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()`; pass `Nette\CommandLine\Normalizers::realPath(...)` as the normalizer (3735b068)
+- **Removed** `Nette\CommandLine\Parser::Normalizer`: the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()`; pass `normalizer:` to the `add*()` method of `Nette\CommandLine\Command` (3735b068)
+- **Removed** `Nette\CommandLine\Parser::Default`: the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()`; pass `default:` to the `add*()` method of `Nette\CommandLine\Command` (3735b068)
+- **Removed** `Nette\CommandLine\Parser::ARGUMENT` (deprecated since 1.7): no replacement, the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()` (3735b068)
+- **Removed** `Nette\CommandLine\Parser::OPTIONAL` (deprecated since 1.7): no replacement, the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()` (3735b068)
+- **Removed** `Nette\CommandLine\Parser::REPEATABLE` (deprecated since 1.7): no replacement, the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()` (3735b068)
+- **Removed** `Nette\CommandLine\Parser::ENUM` (deprecated since 1.7): no replacement, the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()` (3735b068)
+- **Removed** `Nette\CommandLine\Parser::REALPATH` (deprecated since 1.7): no replacement, the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()` (3735b068)
+- **Removed** `Nette\CommandLine\Parser::VALUE` (deprecated since 1.7): no replacement, the keys of the `$defaults` array are gone together with `Nette\CommandLine\Parser::addFromHelp()` (3735b068)
+- **Removed** `Nette\CommandLine\ValueType`: the kind of a parameter is its class, `Nette\CommandLine\Parameters\Flag`, `Nette\CommandLine\Parameters\Option` or `Nette\CommandLine\Parameters\Argument` (3735b068)
+- **Removed** `Nette\CommandLine\Option`: parameters are `Nette\CommandLine\Parameters\Option` and its siblings, created by the `add*()` methods of `Nette\CommandLine\Command` (3735b068)
+- **Renamed** `Nette\CommandLine\Parser::normalizeRealPath()` → `Nette\CommandLine\Normalizers::realPath()`, the old name was removed; it throws `InvalidArgumentException` instead of `Exception` and refuses an empty path, which resolved to the working directory (19606abc)
+- **Replaced** `Nette\CommandLine\Parser::addSwitch()` with `Nette\CommandLine\Command::addFlag()`: define the flag on a `Nette\CommandLine\Command` and pass it to `Nette\CommandLine\Parser::parse()`; the second parameter is now `$description`, so a positional alias silently becomes the description: pass `alias:` and `repeatable:` by name; it returns the `Nette\CommandLine\Parameters\Flag`, not the parser, so the calls no longer chain (3735b068)
+- **Replaced** `Nette\CommandLine\Parser::addOption()` with `Nette\CommandLine\Command::addOption()`: define the option on a `Nette\CommandLine\Command`; `$fallback` is now `$default` and `$optionalValue` is `$valueOptional`; the second parameter is now `$description` and the order of the rest changed, so pass everything but the name by name; it returns the `Nette\CommandLine\Parameters\Option`, not the parser, so the calls no longer chain (3735b068)
+- **Replaced** `Nette\CommandLine\Parser::addArgument()` with `Nette\CommandLine\Command::addArgument()`: define the argument on a `Nette\CommandLine\Command`; `$fallback` is now `$default`; the second parameter is now `$description`, so pass `optional:` and the rest by name; it returns the `Nette\CommandLine\Parameters\Argument`, not the parser, so the calls no longer chain (3735b068)
+- **Replaced** `Nette\CommandLine\Parser::parseOnly()` with `Nette\CommandLine\Command::addFlag()`: mark the early-exit flag (`--help`, `--version`) with `standalone: true`, it then answers before the rest of the line is checked (3735b068)
+- **Replaced** `Nette\CommandLine\Parser::help()` with `Nette\CommandLine\HelpRenderer::render()`: the help is drawn from the definition, not echoed from a stored text (3735b068)
+- **Replaced** `Nette\CommandLine\Parser::isEmpty()` with `Nette\CommandLine\ParseResult::isEmpty()`: ask the result of `Nette\CommandLine\Parser::parse()` (3735b068)
+- **Replaced** `Nette\CommandLine\Console::detectColors()` with `Nette\CommandLine\Console::hasColors()`: it is an instance method of a console bound to a stream (3735b068)
+- **Replaced** `Nette\CommandLine\Console::detectTerminal()` with `Nette\CommandLine\Console::isTerminal()`: it is an instance method of a console bound to a stream (3735b068)
+- **Replaced** `Nette\CommandLine\Console::useColors()` with `Nette\CommandLine\Console::setColorDepth()`: pass a `Nette\CommandLine\ColorDepth`, `Nette\CommandLine\ColorDepth::None` turns colors off, or give it to the constructor (3735b068)
+- **Signature** `Nette\CommandLine\Parser::__construct()`: takes no help text and no defaults; build the definition on a `Nette\CommandLine\Command` and pass it to `Nette\CommandLine\Parser::parse()` (3735b068)
+- **Signature** `Nette\CommandLine\Parser::parse()`: takes the `Nette\CommandLine\Command` as the first parameter and returns `Nette\CommandLine\ParseResult` instead of an array; read a value with `Nette\CommandLine\ParseResult::get()` instead of `$args['--name']`, an unknown name throws even in `$args->get('--name') ?? $default`, `Nette\CommandLine\ParseResult::toArray()` returns the plain array; errors are `Nette\CommandLine\ParseException` (ecb61a00)
+- **Signature** `Nette\CommandLine\Parser`: the class is final (ecb61a00)
+- **Signature** `Nette\CommandLine\Console::color()`: the text is required; calling it with `null` to emit only the opening escape sequence is no longer possible; an empty or unknown color name throws `InvalidArgumentException` (1087da78)
+- **Signature** `Nette\CommandLine\Console`: the class is final (1087da78)
+
 ## 1.9.0
 
 - **Removed** `Nette\CommandLine\Parser::checkArg()`: no replacement, the parser applies the enum check and the normalizer itself (d6edbb89)
