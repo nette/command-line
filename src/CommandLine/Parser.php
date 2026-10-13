@@ -7,6 +7,8 @@
 
 namespace Nette\CommandLine;
 
+use function count;
+
 
 /**
  * Stupid command line arguments parser.
@@ -334,7 +336,7 @@ class Parser
 
 	private function normalizeValue(Option $opt, mixed $value): mixed
 	{
-		if ($opt->enum && $value !== self::OptionPresent && !in_array($value, $opt->enum, strict: true)) {
+		if ($opt->enum && $value !== self::OptionPresent && !in_array($value, $opt->enum, true)) {
 			throw new \Exception("Value of option $opt->name must be " . implode(', or ', $opt->enum) . '.');
 		}
 
