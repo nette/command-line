@@ -44,7 +44,7 @@ How much code does it take to make all of this work? Surprisingly little. You wr
 ```php
 use Nette\CommandLine\Attributes as Cli;
 use Nette\CommandLine\Command;
-use Nette\CommandLine\Parser;
+use Nette\CommandLine\Runner;
 
 final class ImageConverter
 {
@@ -73,13 +73,11 @@ require __DIR__ . '/vendor/autoload.php';
 
 $converter = new ImageConverter;
 $program = Command::from($converter->convert(...));
-
-$parser = new Parser;
-$args = $parser->parse($program);
-exit($args->run());
+$runner = new Runner($program, version: 'Converter 1.0');
+exit($runner->run());
 ```
 
-Writing `$converter->convert(...)` doesn't call the method, it passes it on. `Command::from()` reads from it what the script accepts. `Parser` then reads the command line and checks the values. Finally `run()` calls your method with the right values. Whatever the method returns becomes the exit code of the script. That's how the shell, CI or another script learns how things went: 0 means success, anything else a problem.
+Writing `$converter->convert(...)` doesn't call the method, it passes it on. `Command::from()` reads from it what the script accepts, and `Runner` takes care of the rest: it parses the command line, checks the values and calls the method. Whatever the method returns becomes the exit code of the script. That's how the shell, CI or another script learns how things went: 0 means success, anything else a problem.
 
 And since people at the command line have their habits, the script copes with all the usual spellings: `--format png`, `--format=png` and `-f png` mean the same, single-letter options can be stuck together (`-nf png` is `-n -f png`), and options may stand anywhere between the files.
 
@@ -87,37 +85,12 @@ And since people at the command line have their habits, the script copes with al
 Help and Errors
 ===============
 
-Every decent script should have help and report mistakes clearly. Both take just a few lines; extend the part of `convert.php` that runs the method like this (the two new `use` lines belong at the top, with the others):
-
-```php
-use Nette\CommandLine\HelpRenderer;
-use Nette\CommandLine\UsageException;
-
-$converter = new ImageConverter;
-$program = Command::from($converter->convert(...));
-$program->addFlag('--help', 'Print this help', alias: '-h', standalone: true);
-
-$parser = new Parser;
-$renderer = new HelpRenderer;
-
-try {
-	$args = $parser->parse($program);
-	if ($args->get('--help')) {
-		$renderer->render($args->command);
-		exit(0);
-	}
-	exit($args->run());
-
-} catch (UsageException $e) {
-	$renderer->renderError($e);
-	exit(2);
-}
-```
-
-The flag `--help` is standalone, so it works even when the user hasn't given the required files. The parser checks nothing else in that case. `HelpRenderer` builds the help from the descriptions in the attributes and prints it for `$args->command`, the command the user selected; in a script without commands, that's the whole program. Now try running `php convert.php --help`:
+Now try running `php convert.php --help`. `Runner` has given the script the options `--help` and `--version`, and built the help from the descriptions in the attributes:
 
 ```
 $ php convert.php --help
+Converter 1.0
+
 Usage: convert.php [options] <files>...
 
 Converts images to another format
@@ -129,11 +102,12 @@ Options:
   -f, --format <jpg|png|webp>  Target format (default: webp)
   -n, --dry-run                Only show what would be done
   -h, --help                   Print this help
+  -V, --version                Print the name and the version
 ```
 
 You didn't have to write it, and yet it is complete and aligned, and in a terminal it comes in color. And since it comes from the same method that does the work, it will never claim anything other than what the script really can do.
 
-Mistakes are taken care of by the `catch` block. When the user makes a typo or enters nonsense, the parser throws `UsageException`, and instead of a stack trace `renderError()` turns it into a clear answer:
+The script is just as well prepared for mistakes. When the user makes a typo or enters nonsense, they don't get a stack trace but a clear answer:
 
 ```
 $ php convert.php --fromat png photo.jpg
@@ -144,8 +118,6 @@ Error: Option `--format`: expects `jpg`, `png` or `webp`, `gif` given.
 ```
 
 The help is printed right below the message, so the user doesn't have to look anything up, and the script ends with exit code 2, the usual way to report a wrong command line. Your method isn't called at all in that case, so it never runs with nonsensical values.
-
-This block that runs the program is the same in every script, so you write it once and from then on only change what goes into `$program`.
 
 
 Without Attributes
@@ -161,13 +133,12 @@ $command = new Command('convert');
 $command->addOption('--format', 'Target format', alias: '-f', enum: ['jpg', 'png', 'webp']);
 $command->addArgument('files', 'Images to convert', repeatable: true);
 
-$parser = new Parser;
-$args = $parser->parse($command);
+$args = (new Parser)->parse($command);
 $args->get('--format');  // 'png'
 $args->get('files');     // ['photo.jpg', 'logo.png']
 ```
 
-The help and errors are handled exactly as above. Everything options and arguments can do is described [below](#flags-options-and-arguments).
+Keep in mind, though, that `Parser` only reads. It doesn't handle the help or report mistakes for you, so a wrong command line ends with an exception. How to add that, or how to bring in `Runner` here as well, is shown [below](#running-the-program), together with everything options and arguments can do.
 
 
 Several Commands
@@ -187,11 +158,13 @@ You don't have to rewrite anything. Each command is one method with the `#[Cli\C
 $tools = new ImageTools;  // contains the methods convert() and resize()
 $program = new Command('images');
 $program->addFlag('--quiet', 'Print nothing but errors', alias: '-q');
-$program->addFlag('--help', 'Print this help', alias: '-h', standalone: true);
 $program->addCommandsFrom($tools);
+
+$runner = new Runner($program);
+exit($runner->run());
 ```
 
-The rest of the script, the parser, the help and the errors, is the same as in `convert.php`. Since `render($args->command)` prints the help of the selected command, each command gets its own help (`php images.php convert --help`). Commands can be nested too, so `php images.php cache clear`, for example, is the command `clear` inside the command `cache`. More in [Commands](#commands).
+Each command gets its own help (`php images.php convert --help`), and commands can be nested, so `php images.php cache clear`, for example, is the command `clear` inside the command `cache`. More in [Commands](#commands).
 
 
 Flags, Options and Arguments
@@ -242,7 +215,7 @@ $args = $parser->parse($command, ['photo.jpg', '--format', 'png']);
 
 Two methods help when you need more than the value itself. `isEmpty()` tells you the user wrote nothing at all after the script name. `wasProvided('--format')` tells you whether the user really gave the option, so you can tell that they wrote `--format webp` even when `webp` is also the default value. That's useful, for example, when merging the command line with a configuration file.
 
-Watch out for one thing: `Parser` only reads. When the user gets something wrong, it throws an exception, and it doesn't print the help by itself either. How to add both is shown in the section [Running the Program](#running-the-program).
+Watch out for one thing: `Parser` only reads. When the user gets something wrong, it throws an exception, and it doesn't print the help by itself either. Both are handled for you by the [Runner](#running-the-program). If you want everything in your own hands, see the sections [Help](#help) and [Errors](#errors).
 
 
 Flags
@@ -532,7 +505,7 @@ $args = $parser->parse($program);
 exit($args->run());
 ```
 
-How to add the help and error reporting is shown in the section [Running the Program](#running-the-program).
+Even more comfortable is handing the program to the [Runner](#running-the-program), which adds the help and error reporting on top.
 
 The types of the parameters are checked against what the option can give. An option the user didn't give and that has no default value is `null`, so it belongs in `?string`, not in `string`. If the handler had `string $format`, the library reports it with an exception the very first time the script runs, before anything is done, and even for commands that aren't being run at the moment:
 
@@ -674,42 +647,39 @@ Since `match` has no `default` arm, it throws `UnhandledMatchError` if you forge
 Running the Program
 ===================
 
-Parsing the line, answering `--help` and `--version`, reporting a mistake and running the handler is done the same way in every tool. The whole part of our tool that runs it looks like this:
+Parsing the line, answering `--help` and `--version`, reporting a mistake and running the handler is done the same way in every tool. That's why [Nette\CommandLine\Runner](https://api.nette.org/commandline/master/Nette/CommandLine/Runner.html) does it all at once and returns the exit code:
 
 ```php
-use Nette\CommandLine\HelpRenderer;
-use Nette\CommandLine\UsageException;
+use Nette\CommandLine\Runner;
 
-$program->addFlag('--help', 'Print this help', alias: '-h', standalone: true);
-$program->addFlag('--version', 'Print the version', standalone: true);
-
-$parser = new Parser;
-$renderer = new HelpRenderer;
-
-try {
-	$args = $parser->parse($program);
-	if ($args->get('--help')) {
-		$renderer->render($args->command);
-		exit(0);
-	} elseif ($args->get('--version')) {
-		echo "Images 1.0\n";
-		exit(0);
-	}
-	exit($args->run());
-
-} catch (UsageException $e) {
-	$renderer->renderError($e);
-	exit(2);
-}
+$runner = new Runner($program, version: 'Images 1.0');
+exit($runner->run());
 ```
 
-Let's walk through it. The flags `--help` and `--version` are standalone, so they work even when the user hasn't given the required arguments, more in the [section on the help and version](#--help-and---version). `render($args->command)` prints the help of the command the user selected, so `images.php convert --help` shows the help of `convert`. Finally `run()` runs the handler of the selected command and returns its exit code.
+`Runner` adds the option `--help` (`-h` for short) to the program, which prints the help of the selected command, so `images.php convert --help` shows the help of `convert`. When you give a version, it also adds `--version` (`-V` for short) and puts the version at the top of the help as well.
 
-When the user gets the line wrong, the parser throws `ParseException`, a kind of `UsageException`. `renderError()` prints the message with the help of the command the user got wrong below it, to the error output. The script then ends with code 2. That's the convention for a wrong command line, and it sets it apart from code 1, with which a tool reports that it found something or that something failed. A `UsageException` thrown by a handler is handled the same way, see [Errors](#errors). Other exceptions from the handler pass through the `catch` block.
+When the user gets the line wrong, `Runner` prints the message with the help of the command they got wrong below it, to the error output. Then it returns exit code 2. That's the convention for a wrong command line, and it sets it apart from code 1, with which a tool reports that it found something or that something failed. It behaves the same way when a handler throws `UsageException`, see [Errors](#errors). Other exceptions from the handler pass through, as if `Runner` weren't there.
 
-The option `--no-color`, which turns colors off, is added in a similar way; you'll find how on the page [Terminal Output](#the---no-color-option).
+You can adjust the behavior with named parameters:
 
-This part works with all handlers, whether described by attributes or passed as `handler:`. A program without commands but with a handler can be created without attributes too, `new Command('convert', handler: ...)`.
+```php
+$runner = new Runner(
+	$program,
+	version: 'Images 1.0',
+	helpWhenEmpty: true,  // running without a single word prints the help
+	colorFlag: true,      // adds the option --no-color, which turns colors off
+	usageExitCode: 3,     // a code other than 2 for a wrong command line
+	errorExitCode: 1,     // prints exceptions of the handler as "Error: ..." and returns 1
+	out: $console,        // the console for the output, so that --no-color applies to it too
+	err: $errors,         // the console for the error output, by default it writes to STDERR
+);
+```
+
+`errorExitCode` doesn't apply to `Error`, a mistake in the code, which always passes through. The options `Runner` adds show up in the help among the options of the program. When the program already has an option of the same name, `Runner` leaves it alone and just handles it. When the program already uses a short form, such as `-h` for `--host`, `Runner` doesn't use it for `--help`. `--no-color` is read before the line is parsed, so even an error message is printed without colors.
+
+You can color the version. Instead of a string, pass a function that gets the console: `version: fn(Console $console) => $console->color('aqua', 'Images') . ' 1.0'`. That way `--no-color` applies to it too.
+
+`Runner` works with all handlers, whether described by attributes or passed as `handler:`. A program without commands but with a handler can be created without attributes too, `new Command('convert', handler: ...)`.
 
 
 Help
@@ -766,14 +736,21 @@ $text = $renderer->renderToString($command);
 ```
 
 
-`--help` and `--version`
---------------------
+Your Own `--help` and `--version`
+-----------------------------
 
-One thing about both flags deserves attention: when the script has a required argument, `convert.php --help` would end with an error that the argument is missing. That's why you mark them as standalone:
+`Runner` adds both options and handles them for you. Without it you do it yourself, and one thing deserves attention: when the script has a required argument, `convert.php --help` would end with an error that the argument is missing. So mark the flag as standalone, and it answers on its own:
 
 ```php
 $command->addFlag('--help', 'Print this help', alias: '-h', standalone: true);
-$command->addFlag('--version', 'Print the version', standalone: true);
+$command->addFlag('--version', standalone: true);
+
+$args = $parser->parse($command);
+if ($args->get('--help')) {
+	$renderer = new HelpRenderer;
+	$renderer->render($args->command);
+	exit(0);
+}
 ```
 
 When the user uses a standalone flag, the parser checks and requires nothing. It returns that flag as `true`, the other flags as they were given, and everything else with its default value. So you print the help before the script starts reading its configuration or checking files. That's why a setting that should work together with `--help` is best made a flag. For example, `--help --no-color` prints the help without colors.
@@ -784,14 +761,16 @@ With commands, the command is selected first, so `images.php convert --help` giv
 Errors
 ======
 
-When the user gets the line wrong, the parser throws [Nette\CommandLine\ParseException](https://api.nette.org/commandline/master/Nette/CommandLine/ParseException.html). You catch it and pass it to `renderError()`, as a shortened form of the [part that runs the program](#running-the-program) shows:
+When the user gets the line wrong, the parser throws [Nette\CommandLine\ParseException](https://api.nette.org/commandline/master/Nette/CommandLine/ParseException.html). `Runner` catches it and prints it. Without it, you do it like this:
 
 ```php
+use Nette\CommandLine\UsageException;
+
 try {
 	$args = $parser->parse($program);
 	exit($args->run());
-
 } catch (UsageException $e) {
+	$renderer = new HelpRenderer;
 	$renderer->renderError($e);
 	exit(2);
 }
@@ -836,28 +815,28 @@ Common messages, as a terminal with colors shows them:
 
 The messages are in English. If you want to word them differently or translate them, `ParseException` has everything you need: `reason` says what was wrong, as a case of the `ParseFailure` enum (such as `ParseFailure::UnknownOption`), `parameter` is the parameter the error concerns, and `token` is the word of the command line it's about, exactly as the user wrote it, or `null` when something is missing. Since `token` comes from the user, strip control characters from it before printing it.
 
-Mistakes in your definition, such as an option name without a dash, a name used twice or a required argument after an optional one, are not mistakes of the user. They throw `InvalidArgumentException`, which the `catch` block doesn't catch, so it shows up like any other mistake in the code.
+Mistakes in your definition, such as an option name without a dash, a name used twice or a required argument after an optional one, are not mistakes of the user. They throw `InvalidArgumentException`, and `Runner` doesn't catch them at all.
 
 
 Testing
 =======
 
-You test the script without running it from the command line. You pass the parser the individual words of the command line without the script name, and check what it read from them. The examples use [Nette Tester](https://tester.nette.org/en), but any testing framework will do:
+You test the script without running it from the command line. You pass `run()` the individual words of the command line without the script name, and catch the error output in memory. A console that doesn't write to a terminal uses no colors, so you compare plain text. The examples use [Nette Tester](https://tester.nette.org/en), but any testing framework will do:
+
+```php
+$output = fopen('php://memory', 'w+');
+$runner = new Runner($program, err: new Console($output));
+$exitCode = $runner->run(['convert', '--format', 'gif', 'photo.jpg']);
+
+Assert::same(2, $exitCode);
+Assert::contains('expects `jpg`, `png` or `webp`', stream_get_contents($output, offset: 0));
+```
+
+If you only want to check how a line is understood, without running anything, pass the words to the parser:
 
 ```php
 $args = $parser->parse($program, ['convert', 'photo.jpg', '-f', 'png']);
 Assert::same('png', $args->get('--format'));
-Assert::same(0, $args->run());
-```
-
-The parser reports a wrong command line with `ParseException`, so you can test what the user will see as well:
-
-```php
-Assert::exception(
-	fn() => $parser->parse($program, ['convert', '--format', 'gif', 'photo.jpg']),
-	ParseException::class,
-	'Option `--format`: expects `jpg`, `png` or `webp`, `gif` given.',
-);
 ```
 
 A single command is tested by passing it to the parser together with the whole line. The parser checks that the line really leads to that command:
@@ -955,30 +934,26 @@ You can influence the behavior with environment variables that other tools know 
 
 ### The `--no-color` Option
 
-Users often want to turn colors off right on the command line. Give the program a flag `--no-color`, and after parsing the line turn colors off for your consoles with the `setColorDepth()` method:
+Users often want to turn colors off right on the command line. When you run the program with the [Runner](#running-the-program), it's enough to tell it `colorFlag: true` and pass the consoles concerned. Runner adds the option `--no-color` and takes care of the rest:
 
 ```php
-use Nette\CommandLine\ColorDepth;
-
 $out = new Console(STDOUT);
 $err = new Console(STDERR);
 $tools = new ImageTools($out);
 
 $program = new Command('images');
-$program->addFlag('--no-color', 'Print plain output without colors');
 $program->addCommandsFrom($tools);
-
-$parser = new Parser;
-$args = $parser->parse($program);
-if ($args->get('--no-color')) {
-	$out->setColorDepth(ColorDepth::None);
-	$err->setColorDepth(ColorDepth::None);
-}
+$runner = new Runner($program, colorFlag: true, out: $out, err: $err);
+exit($runner->run());
 ```
 
-So that the option applies to the help and error messages too, print them through renderers with these consoles: `new HelpRenderer($out)` for the help and `new HelpRenderer($err)` for errors. Only a mistake in the command line itself is reported before the parser reads the flag, so it stays in color. The `NO_COLOR` environment variable turns colors off absolutely everywhere.
+Without Runner you turn colors off yourself with the `setColorDepth()` method, or right in the constructor:
 
-You can also create a console without colors right away, `new Console(STDOUT, colorDepth: ColorDepth::None)`.
+```php
+use Nette\CommandLine\ColorDepth;
+
+$console = new Console(STDOUT, colorDepth: ColorDepth::None);
+```
 
 You can also ask the console how things stand:
 

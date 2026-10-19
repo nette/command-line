@@ -401,6 +401,24 @@ final class Command
 
 
 	/**
+	 * Moves the flag before the first command, section or text, so that a flag added to a finished definition is listed
+	 * with the options, not after them.
+	 * @internal
+	 */
+	public function moveBeforeCommands(Flag $flag): void
+	{
+		$items = array_values(array_filter($this->items, fn($item) => $item !== $flag));
+		foreach ($items as $i => $item) {
+			if ($item instanceof self || $item instanceof Section || $item instanceof Text) {
+				array_splice($items, $i, 0, [$flag]);
+				$this->items = $items;
+				return;
+			}
+		}
+	}
+
+
+	/**
 	 * Refuses names, aliases or negations taken by an option of this command, of a command above it or of a command
 	 * below it. Commands beside it may reuse them.
 	 * @param  list<?string>  $names

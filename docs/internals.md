@@ -3,7 +3,7 @@
 Small classes, mostly clear from their signatures. This is the thin "invariants & traps"
 layer, the facts that are expensive to rediscover.
 
-## Four roles, four classes
+## Five roles, five classes
 
 - **`Command`** is the definition: a tree whose root is the program and whose nodes are its
   commands. It knows nothing of `argv`, the environment or the output.
@@ -14,6 +14,22 @@ layer, the facts that are expensive to rediscover.
   Like `Parser`, it takes the node as an argument and keeps nothing between calls.
 - **`Console`** writes to a stream and knows no `Command`. The renderer colors and writes
   through it; `renderToString()` without a console is plain text.
+- **`Runner`** is the only one that runs the program in the process: it reads `argv`, owns the
+  two consoles, answers `--help`, `--version` and `--no-color`, reports a usage error and returns
+  the exit code. The other four stay free of the process because it holds all of that.
+
+**The runner adds its flags to the program it is given**, so the definition is changed, and a
+second runner over it finds them there; a node cannot be copied, so this is the price of the flags
+being ordinary ones, listed, parsed and inherited as any other. They are placed before the first
+command, section or text by the internal `Command::moveBeforeCommands()`, since a finished
+definition usually ends with them and the help would draw the flags as a block of their own after
+its texts. A flag of that name the program has is answered as it is; an alias it took is left out.
+**`--no-color` is read from the tokens before parsing** (up to `--`, after which nothing is an
+option, and a value starting with a dash takes `=`, so a bare `--no-color` is never a value), so that
+a mistake of the line is reported plain too; the empty line of `helpWhenEmpty` is decided before
+parsing as well, which would demand the required arguments. `errorExitCode` catches what the handler
+throws as `\Exception` and never an `\Error`, a bug, nor what `parse()` throws besides a usage
+error: an `\InvalidArgumentException` from the binding of handlers is a mistake of the definition.
 
 The parameters live in the `Parameters` namespace and split by **whether they take a value**,
 the axis most settings follow. `Flag` takes none; `ValueParameter` holds the enum and the
