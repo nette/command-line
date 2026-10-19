@@ -20,7 +20,8 @@ three phases of `parse()` with the command selection and the sentinel, `get()` o
 command line as a tree of the program and its commands, `Parser` reads a command
 line against it and returns a `ParseResult`, `HelpRenderer` draws the help of any
 command and a usage error, `Console` writes to a stream in color, `Prompt` asks the
-user at a terminal and `Ansi` measures text the way a terminal shows it. The parameters live in the
+user at a terminal, `Ansi` measures text the way a terminal shows it and `Runner` runs the
+program in the process: help, version, usage errors and the exit code. The parameters live in the
 `Parameters` namespace: `Flag` extends `Parameter`, while `Option` and `Argument`
 extend it through `ValueParameter`. `Section` and `Text` in the `Help` namespace
 shape the help. The attributes `Command`, `Flag`, `Option` and `Argument` in the
@@ -51,9 +52,10 @@ composer phpstan
 
 ## Working in this repo
 
-- **Definition, parsing, help and output are four classes.** `Command` never
+- **Definition, parsing, help, output and running are five classes.** `Command` never
   touches `argv`, the environment or a stream; `Parser` and `HelpRenderer` take
-  the command as an argument and keep no state; `Console` knows no `Command`.
+  the command as an argument and keep no state; `Console` knows no `Command`;
+  `Runner` alone holds the process, `argv`, the consoles and the exit code.
   Each node keeps one ordered list of items and the help is always drawn from it.
 - **Every setting is a named argument of `add*()` and cannot change afterwards**, so
   everything is refused at once, the rules over several arguments included, and the
