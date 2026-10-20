@@ -14,3 +14,5 @@ if (!defined('STDOUT')) { // php-cgi has no standard streams
 	define('STDOUT', fopen('php://stdout', 'w'));
 	define('STDERR', fopen('php://stderr', 'w'));
 }
+
+require __DIR__ . '/helpers.php';

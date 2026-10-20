@@ -207,7 +207,7 @@ final class Command
 
 
 	/**
-	 * Adds a text at this place of the help, printed as it is: not wrapped, collapsed or colored.
+	 * Adds a text at this place of the help, printed as it is: not wrapped or collapsed, only its code in backticks is colored.
 	 */
 	public function addText(string $text): static
 	{

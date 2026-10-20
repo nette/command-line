@@ -9,7 +9,7 @@ namespace Nette\CommandLine\Help;
 
 
 /**
- * A text of the help, printed as it is: not wrapped, collapsed or colored.
+ * A text of the help, printed as it is: not wrapped or collapsed, only its code in backticks is colored.
  * @internal
  */
 final readonly class Text

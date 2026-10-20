@@ -1,0 +1,482 @@
+<?php declare(strict_types=1);
+
+/**
+ * This file is part of the Nette Framework (https://nette.org)
+ * Copyright (c) 2004 David Grudl (https://davidgrudl.com)
+ */
+
+namespace Nette\CommandLine;
+
+use Nette\CommandLine\Help\{Section, Text};
+use Nette\CommandLine\Parameters\{Argument, Flag, Option, Parameter};
+use function count, is_bool, is_scalar, strlen;
+
+
+/**
+ * Draws the help of a command. The colored output is the plain one wrapped in escape
+ * sequences, so stripping them gives the plain one back, only without the backticks of the code
+ * a description or a text writes as Markdown does, which the color takes the place of.
+ */
+final readonly class HelpRenderer
+{
+	/** role => color of Console::color(); every role the renderer draws with has to be here */
+	private const Theme = [
+		'heading' => '#D7AF5F',
+		'option' => '#87AFD7',
+		'argument' => '#D78787', // as a value
+		'command' => '#87D787',
+		'value' => '#D78787',
+		'default' => '#767676', // also the dots of a repeatable parameter
+		'code' => '#87D7FF', // written in backticks in a description, a text or a message
+		'error' => '#FF5F5F',
+	];
+
+	private const MaxSyntaxWidth = 28;
+	private const MinDescriptionWidth = 20;
+	private const Indent = '  ';
+
+
+	/**
+	 * Without a console, render() writes to a new one on STDOUT, renderError() on STDERR, and renderToString() returns
+	 * plain text.
+	 * Descriptions are wrapped to the width, the terminal's when none is given; the usage, a text, a long syntax or a
+	 * long word overflows.
+	 */
+	public function __construct(
+		private ?Console $console = null,
+		private ?int $width = null,
+	) {
+	}
+
+
+	/**
+	 * Writes the help of the command to the console.
+	 */
+	public function render(Command $command): void
+	{
+		if ($this->console === null) {
+			(new self(new Console, $this->width))->render($command);
+		} else {
+			$this->console->write($this->renderToString($command));
+		}
+	}
+
+
+	/**
+	 * Writes the message of the error to the console, followed by the help of the command in which it went wrong.
+	 */
+	public function renderError(UsageException $e): void
+	{
+		if ($this->console === null) {
+			(new self(new Console(STDERR), $this->width))->renderError($e);
+		} else {
+			$this->console->write(
+				$this->style('error', 'Error:') . ' ' . $this->formatText($e->getMessage())
+				. "\n\n"
+				. $this->renderToString($e->command),
+			);
+		}
+	}
+
+
+	/**
+	 * Returns the help of the command, colored when there is a console.
+	 */
+	public function renderToString(Command $command): string
+	{
+		$items = self::collectItems($command);
+		$column = strlen(self::Indent) + $this->syntaxWidth($items) + 2;
+		$width = $this->width ?? ($this->console ?? new Console)->getWidth();
+
+		$blocks = $block = [];
+		foreach ($items as $item) {
+			if ($item instanceof Parameter || $item instanceof Command) {
+				array_push($block, ...$this->renderEntry($item, $column, $width));
+				continue;
+			}
+
+			$blocks[] = implode("\n", $block);
+			$block = $item instanceof Section
+				? [$this->style('heading', $item->title . ':')]
+				: [];
+			if ($item instanceof Text) {
+				$blocks[] = $this->formatText($item->text);
+			}
+		}
+
+		$blocks[] = implode("\n", $block);
+		$usage = $this->renderUsage($command->usage ?? [$this->generateUsage($command)]);
+		$description = implode("\n", $this->wrap($this->describe($command), $width));
+		return implode("\n\n", array_filter([$usage, $description, ...$blocks], fn($s) => $s !== '')) . "\n";
+	}
+
+
+	/**
+	 * The items of the command without the hidden parameters, with headings where the author wrote none,
+	 * followed by the options it inherits from the commands above.
+	 * @return list<Flag|Option|Argument|Command|Section|Text>
+	 */
+	private static function collectItems(Command $command): array
+	{
+		$own = array_values(array_filter(
+			$command->getItems(),
+			fn($item) => !$item instanceof Parameter || !$item->hidden,
+		));
+
+		$inherited = [];
+		foreach (array_slice($command->getPath(), 0, -1) as $ancestor) {
+			foreach ($ancestor->getOptions() as $option) {
+				if (!$option->hidden) {
+					$inherited[] = $option;
+				}
+			}
+		}
+
+		if (!$inherited) {
+			return self::withHeadings($own);
+		}
+
+		$hasOwnOptions = (bool) array_filter($command->getOptions(), fn($option) => !$option->hidden);
+		return [...self::withHeadings($own), new Section($hasOwnOptions ? 'Global options' : 'Options'), ...$inherited];
+	}
+
+
+	/**
+	 * Puts an "Options:", "Arguments:" or "Commands:" heading in front of every run of items of one kind, but only
+	 * when the author wrote no heading at all; one of their own means they arrange the help.
+	 * @param  list<Flag|Option|Argument|Command|Section|Text>  $items
+	 * @return list<Flag|Option|Argument|Command|Section|Text>
+	 */
+	private static function withHeadings(array $items): array
+	{
+		foreach ($items as $item) {
+			if ($item instanceof Section) {
+				return $items;
+			}
+		}
+
+		$out = [];
+		$last = null;
+		foreach ($items as $item) {
+			$heading = match (true) {
+				$item instanceof Flag, $item instanceof Option => 'Options',
+				$item instanceof Argument => 'Arguments',
+				$item instanceof Command => 'Commands',
+				default => null,
+			};
+			if ($heading !== null && $heading !== $last) {
+				$last = $heading;
+				$out[] = new Section($heading);
+			}
+
+			$out[] = $item;
+		}
+
+		return $out;
+	}
+
+
+	/** @param  list<string>  $lines */
+	private function renderUsage(array $lines): string
+	{
+		$heading = $this->style('heading', 'Usage:');
+		return count($lines) === 1
+			? "$heading " . $lines[0]
+			: "$heading\n" . implode("\n", array_map(fn($line) => self::Indent . $line, $lines));
+	}
+
+
+	private function generateUsage(Command $command): string
+	{
+		$root = $command->getRoot();
+		$parts = [$this->style('command', $root->name ?? basename((string) ($_SERVER['argv'][0] ?? 'program')))];
+		if ($command !== $root) {
+			$parts[] = $this->style('command', $command->getFullName());
+		}
+
+		foreach ($command->getPath() as $level) {
+			if (array_filter($level->getOptions(), fn($option) => !$option->hidden)) {
+				$parts[] = $this->style('option', '[options]');
+				break;
+			}
+		}
+
+		if ($command->getCommands()) {
+			$parts[] = $this->style('command', $command->commandRequired ? '<command>' : '[command]');
+		}
+
+		foreach ($command->getArguments() as $argument) {
+			if (!$argument->hidden) {
+				$parts[] = $this->formatSyntax($argument, styled: true);
+			}
+		}
+
+		return implode(' ', $parts);
+	}
+
+
+	/** @return list<string> */
+	private function renderEntry(Flag|Option|Argument|Command $item, int $column, int $width): array
+	{
+		$syntax = $this->formatSyntax($item, styled: true);
+		$plainWidth = Ansi::measure($syntax);
+		$description = $this->describe($item);
+		if (!$description) {
+			return [self::Indent . $syntax];
+		}
+
+		if ($width - $column < self::MinDescriptionWidth) { // two columns do not fit, so the description goes below
+			$indent = str_repeat(self::Indent, 2);
+			$lines = $this->wrap($description, $width - strlen($indent));
+			return [self::Indent . $syntax, ...array_map(fn($line) => $indent . $line, $lines)];
+		}
+
+		$lines = $this->wrap($description, $width - $column);
+		$length = strlen(self::Indent) + $plainWidth;
+		$out = $length > $column - 2
+			? [self::Indent . $syntax] // too long to share the line; the description starts below
+			: [self::Indent . $syntax . str_repeat(' ', $column - $length) . array_shift($lines)];
+
+		foreach ($lines as $line) {
+			$out[] = str_repeat(' ', $column) . $line;
+		}
+
+		return $out;
+	}
+
+
+	/**
+	 * Builds the left column, e.g. "-o, --output <file>", "[input]..." or "check [paths...]".
+	 */
+	private function formatSyntax(Flag|Option|Argument|Command $item, bool $styled = false): string
+	{
+		$paint = fn(string $role, string $s) => $styled ? $this->style($role, $s) : $s;
+
+		if ($item instanceof Command) {
+			$arguments = [];
+			foreach ($item->getArguments() as $argument) {
+				if (!$argument->hidden) {
+					$arguments[] = $this->formatSyntax($argument, $styled);
+				}
+			}
+
+			return implode(' ', [$paint('command', (string) $item->name), ...$arguments]);
+
+		} elseif ($item instanceof Argument) {
+			$syntax = $item->optional ? "[$item->name]" : "<$item->name>";
+			return $paint('argument', $syntax) . ($item->repeatable ? $paint('default', '...') : '');
+		}
+
+		$name = $item instanceof Flag && $item->negatable ? '--[no-]' . substr($item->name, 2) : $item->name;
+		$syntax = $paint('option', $item->alias === null ? $name : "$item->alias, $name");
+		if ($item instanceof Option) {
+			$value = $item->valueName ?? ($item->enum === null ? 'value' : implode('|', $item->enum));
+			$syntax .= $item->valueOptional
+				? $paint('value', "[=$value]")
+				: ' ' . $paint('value', "<$value>");
+		}
+
+		return $item->repeatable ? $syntax . $paint('default', '...') : $syntax;
+	}
+
+
+	/**
+	 * The words of the description as it is printed, including the "(default: x)" clause when one is due.
+	 * @return list<list<array{string, ?string}>>
+	 */
+	private function describe(Parameter|Command $item): array
+	{
+		$default = $item instanceof Parameter ? self::describeDefault($item) : null;
+		return [
+			...$this->splitWords((string) $item->description, null),
+			...($default === null ? [] : $this->splitWords("(default: $default)", 'default')),
+		];
+	}
+
+
+	/**
+	 * Splits the text into words, each a list of pieces with their role, so that code written in backticks holds the
+	 * role of code even beside a comma. Runs of whitespace collapse, since a description lives in a column. Without
+	 * colors the backticks stay, so that a pipe still tells the code from the words.
+	 * @return list<list<array{string, ?string}>>
+	 */
+	private function splitWords(string $text, ?string $role): array
+	{
+		$words = [[]];
+		$pieces = $this->console?->hasColors() ? self::splitCodeSpans($text) : [[$text, false]];
+		foreach ($pieces as [$piece, $code]) {
+			foreach (preg_split('#(\s+)#', $piece, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [] as $i => $part) {
+				if ($i % 2) { // whitespace ends a word
+					$words[] = [];
+				} elseif ($part !== '') {
+					$words[array_key_last($words)][] = [$part, $code ? 'code' : $role];
+				}
+			}
+		}
+
+		return array_values(array_filter($words));
+	}
+
+
+	/**
+	 * Returns the text with its code spans drawn in the color of code and without the backticks, the rest in the
+	 * given color of Console::color(); without colors the text as it is.
+	 */
+	public function formatText(string $text, ?string $color = null): string
+	{
+		if (!$this->console?->hasColors()) {
+			return $text;
+		}
+
+		$out = '';
+		foreach (self::splitCodeSpans($text) as [$piece, $code]) {
+			$out .= $code ? $this->style('code', $piece) : $this->console->color($color, $piece);
+		}
+
+		return $out;
+	}
+
+
+	/**
+	 * Splits the text at the code spans of Markdown into pieces of text and of code, the code without its backticks.
+	 * A span closes with a run of as many backticks as opened it, so code holding a backtick is written in a longer
+	 * run, and one space padding both sides of the code is dropped; a span does not cross a line.
+	 * @return list<array{string, bool}>  the piece and whether it is code
+	 */
+	public static function splitCodeSpans(string $text): array
+	{
+		$parts = preg_split('~(?<!`)(`+)(?!`)([^\n]*?[^`\n])\1(?!`)~', $text, -1, PREG_SPLIT_DELIM_CAPTURE) ?: [];
+		$pieces = [];
+		foreach ($parts as $i => $part) {
+			if ($i % 3 === 2) {
+				$pieces[] = [preg_match('~^ (.*\S.*) $~', $part, $m) ? $m[1] : $part, true];
+			} elseif ($i % 3 === 0 && $part !== '') {
+				$pieces[] = [$part, false];
+			}
+		}
+
+		return $pieces;
+	}
+
+
+	/**
+	 * Writes the code as a code span that splitCodeSpans() reads back: control characters as escape sequences, since a
+	 * span does not cross a line, in a run of backticks longer than any inside, padded with a space where the padding
+	 * would otherwise be dropped or the code starts or ends with a backtick; empty code as the empty string of a shell.
+	 * @internal
+	 */
+	public static function formatCode(string $code): string
+	{
+		if ($code === '') {
+			return "`''`";
+		}
+
+		$code = addcslashes($code, "\0..\37\177");
+		preg_match_all('~`+~', $code, $m);
+		$fence = str_repeat('`', max([0, ...array_map(strlen(...), $m[0])]) + 1);
+		$pad = preg_match('~^`|`$|^ (?=.*\S).* $~s', $code) ? ' ' : '';
+		return $fence . $pad . $code . $pad . $fence;
+	}
+
+
+	/**
+	 * Returns the default value in words: the description of the default when there is one, otherwise a scalar value
+	 * or the value of an enum case, and null when there is nothing to show.
+	 */
+	private static function describeDefault(Parameter $parameter): ?string
+	{
+		$value = $parameter->default;
+		$words = trim(match (true) {
+			$parameter->defaultDescription !== null => $parameter->defaultDescription,
+			$value instanceof \BackedEnum => (string) $value->value,
+			is_scalar($value) && !is_bool($value) => (string) $value,
+			default => '',
+		});
+		return $words === '' ? null : $words;
+	}
+
+
+	/**
+	 * Breaks the words into lines of at most the given visible width and colors each run of one role. A word longer
+	 * than the line is left to overflow rather than cut in half.
+	 * @param  list<list<array{string, ?string}>>  $words
+	 * @return list<string>
+	 */
+	private function wrap(array $words, int $width): array
+	{
+		$lines = $line = [];
+		$lineWidth = 0;
+		foreach ($words as $word) {
+			$wordWidth = Ansi::measure(implode('', array_column($word, 0)));
+			if ($line && $lineWidth + 1 + $wordWidth > $width) {
+				$lines[] = $this->joinWords($line);
+				$line = [];
+			}
+
+			$lineWidth = $line ? $lineWidth + 1 + $wordWidth : $wordWidth;
+			$line[] = $word;
+		}
+
+		$lines[] = $this->joinWords($line);
+		return $lines;
+	}
+
+
+	/**
+	 * Joins the words of a line, a run of one role colored as a whole, so a color never spans two lines; the space
+	 * between two words belongs to the run only when both sides of it are in its role.
+	 * @param  list<list<array{string, ?string}>>  $words
+	 */
+	private function joinWords(array $words): string
+	{
+		$runs = [];
+		$append = function (string $text, ?string $role) use (&$runs): void {
+			$last = array_key_last($runs);
+			if ($last !== null && $runs[$last][1] === $role) {
+				$runs[$last][0] .= $text;
+			} else {
+				$runs[] = [$text, $role];
+			}
+		};
+		$previous = false; // the role of the piece before, false at the start of the line
+		foreach ($words as $word) {
+			foreach ($word as $j => [$text, $role]) {
+				if ($j === 0 && $previous !== false) {
+					$append(' ', $previous === $role ? $role : null);
+				}
+
+				$append($text, $role);
+				$previous = $role;
+			}
+		}
+
+		return implode('', array_map(fn(array $run) => $run[1] === null ? $run[0] : $this->style($run[1], $run[0]), $runs));
+	}
+
+
+	/**
+	 * The column is as wide as the longest syntax that still fits into it; a longer one
+	 * gets a line of its own and must not stretch the column for everybody else.
+	 * @param  list<Flag|Option|Argument|Command|Section|Text>  $items
+	 */
+	private function syntaxWidth(array $items): int
+	{
+		$widths = [0];
+		foreach ($items as $item) {
+			if (
+				($item instanceof Parameter || $item instanceof Command)
+				&& ($width = Ansi::measure($this->formatSyntax($item))) <= self::MaxSyntaxWidth
+			) {
+				$widths[] = $width;
+			}
+		}
+
+		return max($widths);
+	}
+
+
+	private function style(string $role, string $s): string
+	{
+		return $this->console ? $this->console->color(self::Theme[$role], $s) : $s;
+	}
+}
