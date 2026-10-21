@@ -1,17 +1,13 @@
 {
 	"name": "nette/command-line",
-	"description": "Nette Command Line: options and arguments parser.",
-	"keywords": ["nette", "cmd", "cmd-line"],
-	"homepage": "https://nette.org",
+	"description": "💻 Nette Command Line: turns a PHP script into a proper command-line tool in a few lines. Options, arguments and commands are parsed and checked, help and errors come for free, colors turn off in a pipe. No dependencies.",
+	"keywords": ["nette", "cli", "command line", "console", "arguments", "options", "getopt", "argv", "symfony console"],
+	"homepage": "https://doc.nette.org/command-line",
 	"license": ["BSD-3-Clause", "GPL-2.0-only", "GPL-3.0-only"],
 	"authors": [
 		{
 			"name": "David Grudl",
 			"homepage": "https://davidgrudl.com"
-		},
-		{
-			"name": "Nette Community",
-			"homepage": "https://nette.org/contributors"
 		}
 	],
 	"require": {
