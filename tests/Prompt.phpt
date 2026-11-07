@@ -7,13 +7,13 @@ require __DIR__ . '/bootstrap.php';
 
 
 /** @return array{Prompt, resource} */
-function prompt(string $answers, bool $terminal = true): array
+function prompt(string $answers, bool $terminal = true, ColorDepth $colors = ColorDepth::None): array
 {
 	$input = fopen('php://memory', 'w+');
 	fwrite($input, $answers);
 	rewind($input);
 	$output = fopen('php://memory', 'w+');
-	return [new Prompt(new Console($output, ColorDepth::None, terminal: $terminal), $input, inputTerminal: $terminal), $output];
+	return [new Prompt(new Console($output, $colors, terminal: $terminal), $input, inputTerminal: $terminal), $output];
 }
 
 
@@ -44,6 +44,13 @@ test('an unknown answer asks again, an empty one is the default', function () {
 	[$prompt, $output] = prompt("\nn\n"); // without a default an empty answer asks again
 	Assert::same('n', $prompt->choose('Go on?', ['y', 'n']));
 	Assert::same('Go on? [y/n] Go on? [y/n] ', written($output));
+});
+
+
+test('with colors the default stands out in white, also a digit, which has no capital', function () {
+	[$prompt, $output] = prompt("\n", colors: ColorDepth::Ansi16);
+	Assert::same('1', $prompt->choose('Your choice', ['1', '2'], default: '1'));
+	Assert::same("Your choice [\e[97m1\e[0m/2] ", written($output));
 });
 
 

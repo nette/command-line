@@ -66,10 +66,14 @@ final class Prompt
 			throw new \LogicException('The prompt has no user to ask, so it asks only when isInteractive() is true.');
 		}
 
-		// only the default is in capitals, so that no other choice looks like it
+		// only the default is in capitals, so that no other choice looks like it, and in white where the console has
+		// colors, which a digit needs, having no capital
 		$prompt = $question
 			. ' ['
-			. implode('/', array_map(fn($choice) => $choice === $default ? strtoupper($choice) : strtolower($choice), $keys))
+			. implode('/', array_map(
+				fn($choice) => $choice === $default ? $this->console->color('white', strtoupper($choice)) : strtolower($choice),
+				$keys,
+			))
 			. '] ';
 		$text = '';
 		foreach ($menu as $choice => $description) {

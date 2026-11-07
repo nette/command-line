@@ -1043,7 +1043,7 @@ if ($prompt->isInteractive()) {
 }
 ```
 
-The user sees `Overwrite photo.webp? [y/N/a/q]`, and the default choice is the one in capitals. Which choices you offer is up to you, here they could be yes, no, yes to all and quit. Until the user answers with one of them, the prompt asks again. Letter case doesn't matter, and `choose()` returns the choice exactly as you declared it. Enter on an empty line picks the default, and when there is none, the prompt asks again.
+The user sees `Overwrite photo.webp? [y/N/a/q]`, and the default choice is the one in capitals, in a console with colors also in white, so that a default like `1`, which has no capital, stands out too. Which choices you offer is up to you, here they could be yes, no, yes to all and quit. Until the user answers with one of them, the prompt asks again. Letter case doesn't matter, and `choose()` returns the choice exactly as you declared it. Enter on an empty line picks the default, and when there is none, the prompt asks again.
 
 When each choice deserves a few words, pass them as an array with descriptions, and the prompt prints a menu above the question:
 
